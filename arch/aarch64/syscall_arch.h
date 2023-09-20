@@ -7,6 +7,8 @@
 	return x0; \
 	} while (0)
 
+#ifndef _CERTIKOS_
+
 static inline long __syscall0(long n)
 {
 	register long x8 __asm__("x8") = n;
@@ -70,6 +72,75 @@ static inline long __syscall6(long n, long a, long b, long c, long d, long e, lo
 	register long x5 __asm__("x5") = f;
 	__asm_syscall("r"(x8), "0"(x0), "r"(x1), "r"(x2), "r"(x3), "r"(x4), "r"(x5));
 }
+
+#else
+
+static inline long __syscall0(long n)
+{
+	register long x0 __asm__("x0") = n;
+	register long x1 __asm__("x1");
+	__asm_syscall("r"(x0));
+}
+
+static inline long __syscall1(long n, long a)
+{
+	register long x0 __asm__("x0") = n;
+	register long x1 __asm__("x1") = a;
+	__asm_syscall("r"(x0), "0"(x1));
+}
+
+static inline long __syscall2(long n, long a, long b)
+{
+	register long x0 __asm__("x0") = n;
+	register long x1 __asm__("x1") = a;
+	register long x2 __asm__("x2") = b;
+	__asm_syscall("r"(x0), "0"(x1), "r"(x2));
+}
+
+static inline long __syscall3(long n, long a, long b, long c)
+{
+	register long x0 __asm__("x0") = n;
+	register long x1 __asm__("x1") = a;
+	register long x2 __asm__("x2") = b;
+	register long x3 __asm__("x3") = c;
+	__asm_syscall("r"(x0), "0"(x1), "r"(x2), "r"(x3));
+}
+
+static inline long __syscall4(long n, long a, long b, long c, long d)
+{
+	register long x0 __asm__("x0") = n;
+	register long x1 __asm__("x1") = a;
+	register long x2 __asm__("x2") = b;
+	register long x3 __asm__("x3") = c;
+	register long x4 __asm__("x4") = d;
+	__asm_syscall("r"(x0), "0"(x1), "r"(x2), "r"(x3), "r"(x4));
+}
+
+static inline long __syscall5(long n, long a, long b, long c, long d, long e)
+{
+	register long x0 __asm__("x0") = n;
+	register long x1 __asm__("x1") = a;
+	register long x2 __asm__("x2") = b;
+	register long x3 __asm__("x3") = c;
+	register long x4 __asm__("x4") = d;
+	register long x5 __asm__("x5") = e;
+	__asm_syscall("r"(x0), "0"(x1), "r"(x2), "r"(x3), "r"(x4), "r"(x5));
+}
+
+static inline long __syscall6(long n, long a, long b, long c, long d, long e, long f)
+{
+	register long x0 __asm__("x0") = n;
+	register long x1 __asm__("x1") = a;
+	register long x2 __asm__("x2") = b;
+	register long x3 __asm__("x3") = c;
+	register long x4 __asm__("x4") = d;
+	register long x5 __asm__("x5") = e;
+	register long x6 __asm__("x6") = f;
+	__asm_syscall("r"(x0), "0"(x1), "r"(x2), "r"(x3), "r"(x4), "r"(x5), "r"(x6));
+}
+
+#endif /* _CERTIKOS_ */
+
 
 #define VDSO_USEFUL
 #define VDSO_CGT_SYM "__kernel_clock_gettime"

@@ -143,6 +143,7 @@ wrapper=auto
 gcc_wrapper=no
 clang_wrapper=no
 malloc_dir=mallocng
+certikos=no
 
 for arg ; do
 case "$arg" in
@@ -176,6 +177,7 @@ case "$arg" in
 --enable-*|--disable-*|--with-*|--without-*|--*dir=*) ;;
 --host=*|--target=*) target=${arg#*=} ;;
 --build=*) build=${arg#*=} ;;
+--certikos) certikos=yes ;;
 -* ) echo "$0: unknown option $arg" ;;
 AR=*) AR=${arg#*=} ;;
 RANLIB=*) RANLIB=${arg#*=} ;;
@@ -821,6 +823,7 @@ test "x$shared" = xno && echo "SHARED_LIBS ="
 test "x$cc_family" = xgcc && echo 'WRAPCC_GCC = $(CC)'
 test "x$cc_family" = xclang && echo 'WRAPCC_CLANG = $(CC)'
 test "x$pic_default" = xyes && echo 'AOBJS = $(LOBJS)'
+test "x$certikos" = xyes && echo "CERTIKOS ="
 exec 1>&3 3>&-
 
 test "$srcdir" = "." || ln -sf $srcdir/Makefile .
