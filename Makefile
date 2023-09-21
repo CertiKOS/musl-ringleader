@@ -18,12 +18,12 @@ libdir = $(prefix)/lib
 syslibdir = /lib
 
 MALLOC_DIR = mallocng
-SRC_DIRS = $(addprefix $(srcdir)/,src/* src/malloc/$(MALLOC_DIR) crt ldso $(COMPAT_SRC_DIRS))
+SRC_DIRS = $(addprefix $(srcdir)/,src/* src/malloc/$(MALLOC_DIR) crt ldso $(COMPAT_SRC_DIRS) ringleader/src)
 BASE_GLOBS = $(addsuffix /*.c,$(SRC_DIRS))
 ARCH_GLOBS = $(addsuffix /$(ARCH)/*.[csS],$(SRC_DIRS))
 BASE_SRCS = $(sort $(wildcard $(BASE_GLOBS)))
 ARCH_SRCS = $(sort $(wildcard $(ARCH_GLOBS)))
-BASE_OBJS = $(patsubst $(srcdir)/%,%.o,$(basename $(BASE_SRCS)))
+BASE_OBJS = $(subst ringleader/src,src/ringleader,$(patsubst $(srcdir)/%,%.o,$(basename $(BASE_SRCS))))
 ARCH_OBJS = $(patsubst $(srcdir)/%,%.o,$(basename $(ARCH_SRCS)))
 REPLACED_OBJS = $(sort $(subst /$(ARCH)/,/,$(ARCH_OBJS)))
 ALL_OBJS = $(addprefix obj/, $(filter-out $(REPLACED_OBJS), $(sort $(BASE_OBJS) $(ARCH_OBJS))))
@@ -47,7 +47,7 @@ CFLAGS_AUTO = -Os -pipe
 CFLAGS_C99FSE = -std=c99 -ffreestanding -nostdinc
 
 CFLAGS_ALL = $(CFLAGS_C99FSE)
-CFLAGS_ALL += -D_XOPEN_SOURCE=700 -I$(srcdir)/arch/$(ARCH) -I$(srcdir)/arch/generic -Iobj/src/internal -I$(srcdir)/src/include -I$(srcdir)/src/internal -Iobj/include -I$(srcdir)/include
+CFLAGS_ALL += -D_XOPEN_SOURCE=700 -D_MUSL_ -I$(srcdir)/arch/$(ARCH) -I$(srcdir)/arch/generic -Iobj/src/internal -I$(srcdir)/src/include -I$(srcdir)/src/internal -Iobj/include -I$(srcdir)/include -I$(srcdir)/ringleader/include
 CFLAGS_ALL += $(CPPFLAGS) $(CFLAGS_AUTO) $(CFLAGS)
 
 LDFLAGS_ALL = $(LDFLAGS_AUTO) $(LDFLAGS)
@@ -56,10 +56,11 @@ AR      = $(CROSS_COMPILE)ar
 RANLIB  = $(CROSS_COMPILE)ranlib
 INSTALL = $(srcdir)/tools/install.sh
 
+RINGLEADER_INCLUDES = $(wildcard $(srcdir)/ringleader/include/*.h)
 ARCH_INCLUDES = $(wildcard $(srcdir)/arch/$(ARCH)/bits/*.h)
 GENERIC_INCLUDES = $(wildcard $(srcdir)/arch/generic/bits/*.h)
 INCLUDES = $(wildcard $(srcdir)/include/*.h $(srcdir)/include/*/*.h)
-ALL_INCLUDES = $(sort $(INCLUDES:$(srcdir)/%=%) $(GENH:obj/%=%) $(ARCH_INCLUDES:$(srcdir)/arch/$(ARCH)/%=include/%) $(GENERIC_INCLUDES:$(srcdir)/arch/generic/%=include/%))
+ALL_INCLUDES = $(sort $(INCLUDES:$(srcdir)/%=%) $(GENH:obj/%=%) $(ARCH_INCLUDES:$(srcdir)/arch/$(ARCH)/%=include/%) $(GENERIC_INCLUDES:$(srcdir)/arch/generic/%=include/%) $(RINGLEADER_INCLUDES:$(srcdir)/ringleader/%=%))
 
 EMPTY_LIB_NAMES = m rt pthread crypt util xnet resolv dl
 EMPTY_LIBS = $(EMPTY_LIB_NAMES:%=lib/lib%.a)
@@ -149,6 +150,9 @@ obj/%.o: $(srcdir)/%.S
 obj/%.o: $(srcdir)/%.c $(GENH) $(IMPH)
 	$(CC_CMD)
 
+obj/src/ringleader%.o: $(srcdir)/ringleader/src/%.c
+	$(CC_CMD)
+
 obj/%.lo: $(srcdir)/%.s
 	$(AS_CMD)
 
@@ -156,6 +160,9 @@ obj/%.lo: $(srcdir)/%.S
 	$(CC_CMD)
 
 obj/%.lo: $(srcdir)/%.c $(GENH) $(IMPH)
+	$(CC_CMD)
+
+obj/src/ringleader%.lo: $(srcdir)/ringleader/src/%.c
 	$(CC_CMD)
 
 lib/libc.so: $(LOBJS) $(LDSO_OBJS)
@@ -207,6 +214,9 @@ $(DESTDIR)$(includedir)/bits/%: obj/include/bits/%
 	$(INSTALL) -D -m 644 $< $@
 
 $(DESTDIR)$(includedir)/%: $(srcdir)/include/%
+	$(INSTALL) -D -m 644 $< $@
+
+$(DESTDIR)$(includedir)/%: $(srcdir)/ringleader/include/%
 	$(INSTALL) -D -m 644 $< $@
 
 $(DESTDIR)$(LDSO_PATHNAME): $(DESTDIR)$(libdir)/libc.so
