@@ -397,7 +397,7 @@
 #define __NR_capset                  1090
 #define __NR_personality             1091
 #define __NR_exit                    19
-#define __NR_exit_group              1093
+#define __NR_exit_group              19
 #define __NR_waitid                  1094
 #define __NR_set_tid_address         47
 #define __NR_unshare                 1096
