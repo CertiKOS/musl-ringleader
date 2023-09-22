@@ -823,7 +823,7 @@ test "x$shared" = xno && echo "SHARED_LIBS ="
 test "x$cc_family" = xgcc && echo 'WRAPCC_GCC = $(CC)'
 test "x$cc_family" = xclang && echo 'WRAPCC_CLANG = $(CC)'
 test "x$pic_default" = xyes && echo 'AOBJS = $(LOBJS)'
-test "x$certikos" = xyes && echo "CERTIKOS ="
+test "x$certikos" = xyes && echo "CERTIKOS = 1"
 exec 1>&3 3>&-
 
 test "$srcdir" = "." || ln -sf $srcdir/Makefile .

@@ -205,7 +205,8 @@ long double sqrtl(long double x)
 	top = (top + 0x3fff) >> 1;
 
 	/* r ~ 1/sqrt(m) */
-	static const uint64_t three = 0xc0000000;
+#define three       (0xc0000000ULL)
+	//static const uint64_t three = 0xc0000000;
 	uint64_t r, s, d, u, i;
 	i = (ix.hi >> 42) % 128;
 	r = (uint32_t)__rsqrt_tab[i] << 16;

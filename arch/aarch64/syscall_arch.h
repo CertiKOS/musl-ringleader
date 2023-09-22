@@ -1,13 +1,14 @@
 #define __SYSCALL_LL_E(x) (x)
 #define __SYSCALL_LL_O(x) (x)
 
+
+#ifndef _CERTIKOS_
+
 #define __asm_syscall(...) do { \
 	__asm__ __volatile__ ( "svc 0" \
 	: "=r"(x0) : __VA_ARGS__ : "memory", "cc"); \
 	return x0; \
 	} while (0)
-
-#ifndef _CERTIKOS_
 
 static inline long __syscall0(long n)
 {
@@ -74,6 +75,12 @@ static inline long __syscall6(long n, long a, long b, long c, long d, long e, lo
 }
 
 #else
+
+#define __asm_syscall(...) do { \
+	__asm__ __volatile__ ( "svc 0" \
+	: "=r"(x1) : __VA_ARGS__ : "memory", "cc"); \
+	return x1; \
+	} while (0)
 
 static inline long __syscall0(long n)
 {
