@@ -604,6 +604,7 @@
 #define __NR_landlock_create_ruleset 1297
 #define __NR_landlock_add_rule       1298
 #define __NR_landlock_restrict_self  1299
+#define __NR_certikos_puts 0
 
 
 #endif /* _CERTIKOS_ */

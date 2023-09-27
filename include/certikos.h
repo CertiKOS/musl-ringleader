@@ -6,4 +6,6 @@
 
 int sys_io_uring_setup(uint32_t entries, struct io_uring_params *p);
 
+int certikos_puts(const char* buf);
+
 #endif /* _CERTIKOS_H_ */
