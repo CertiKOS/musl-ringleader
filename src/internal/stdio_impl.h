@@ -18,6 +18,11 @@
 #define F_SVB 64
 #define F_APP 128
 
+//TODO: I don't know if this is a) a safe way to add the flag if stdio is compiled elsewhere, and b) if I should put this flag somewhere else
+#ifdef _CERTIKOS_ 
+	#define F_ENCLAVE_TERMINAL 256
+#endif
+
 struct _IO_FILE {
 	unsigned flags;
 	unsigned char *rpos, *rend;
@@ -96,6 +101,10 @@ hidden void __getopt_msg(const char *, const char *, const char *, size_t);
 
 #define feof(f) ((f)->flags & F_EOF)
 #define ferror(f) ((f)->flags & F_ERR)
+
+#ifdef _CERTIKOS_
+	#define fenclave(f) ((f) -> flags & F_ENCLAVE_TERMINAL)
+#endif
 
 #define getc_unlocked(f) \
 	( ((f)->rpos != (f)->rend) ? *(f)->rpos++ : __uflow((f)) )

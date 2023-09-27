@@ -11,6 +11,10 @@
 #include <math.h>
 #include <float.h>
 
+#ifdef _CERTIKOS_
+	#include <certikos.h>
+#endif
+
 /* Some useful macros */
 
 #define MAX(a,b) ((a)>(b) ? (a) : (b))
@@ -132,7 +136,16 @@ static void pop_arg(union arg *arg, int type, va_list *ap)
 
 static void out(FILE *f, const char *s, size_t l)
 {
-	if (!ferror(f)) __fwritex((void *)s, l, f);
+	#ifdef _CERTIKOS_
+		if(fenclave(f)){
+			certikos_puts_length(s, l);
+		} else {
+            if (!ferror(f))
+                __fwritex((void*)s, l, f);
+        }
+	#else 
+		if (!ferror(f)) __fwritex((void *)s, l, f);
+	#endif
 }
 
 static void pad(FILE *f, char c, int w, int l, int fl)
