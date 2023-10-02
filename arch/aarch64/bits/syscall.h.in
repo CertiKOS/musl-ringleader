@@ -518,7 +518,7 @@
 #define __NR_recvmsg                 1211
 #define __NR_readahead               1212
 #define __NR_brk                     48
-#define __NR_munmap                  1214
+#define __NR_munmap                  50
 #define __NR_mremap                  1215
 #define __NR_add_key                 1216
 #define __NR_request_key             1217
@@ -529,7 +529,7 @@
 #define __NR_fadvise64               1222
 #define __NR_swapon                  1223
 #define __NR_swapoff                 1224
-#define __NR_mprotect                1225
+#define __NR_mprotect                49
 #define __NR_msync                   1226
 #define __NR_mlock                   1227
 #define __NR_munlock                 1228

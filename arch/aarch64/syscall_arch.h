@@ -78,7 +78,7 @@ static inline long __syscall6(long n, long a, long b, long c, long d, long e, lo
 
 #define __asm_syscall(...) do { \
 	__asm__ __volatile__ ( "svc 0" \
-	: "=r"(x1) : __VA_ARGS__ : "memory", "cc"); \
+	: "=r"(x0), "=r"(x1) : __VA_ARGS__ : "memory", "cc"); \
 	return x1; \
 	} while (0)
 
@@ -110,7 +110,7 @@ static inline long __syscall3(long n, long a, long b, long c)
 	register long x1 __asm__("x1") = a;
 	register long x2 __asm__("x2") = b;
 	register long x3 __asm__("x3") = c;
-	__asm_syscall("r"(x0), "0"(x1), "r"(x2), "r"(x3));
+	__asm_syscall("r"(x0), "r"(x1), "r"(x2), "r"(x3));
 }
 
 static inline long __syscall4(long n, long a, long b, long c, long d)
