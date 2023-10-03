@@ -427,7 +427,7 @@
 #define __NR_sched_getparam          1120
 #define __NR_sched_setaffinity       1121
 #define __NR_sched_getaffinity       1122
-#define __NR_sched_yield             1123
+#define __NR_sched_yield             7
 #define __NR_sched_get_priority_max  1124
 #define __NR_sched_get_priority_min  1125
 #define __NR_sched_rr_get_interval   1126
@@ -475,7 +475,7 @@
 #define __NR_gettimeofday            1168
 #define __NR_settimeofday            1169
 #define __NR_adjtimex                1170
-#define __NR_getpid                  1171
+#define __NR_getpid                  9
 #define __NR_getppid                 1172
 #define __NR_getuid                  1173
 #define __NR_geteuid                 1174

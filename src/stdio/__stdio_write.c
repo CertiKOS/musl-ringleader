@@ -1,8 +1,21 @@
 #include "stdio_impl.h"
+#include "certikos_impl.h"
+#include "ringleader.h"
 #include <sys/uio.h>
+#include <string.h>
+
+//this is used by everything, modify me
+// will need shard memory address
+
+//for now use write, then switch to writev, the issue is we will need to also fix all addresses
+// inside teh struct
+// or like define things as offsets
+
+#define WRITE_COOKIE (2020859)
 
 size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 {
+	#ifndef _CERTIKOS_
 	struct iovec iovs[2] = {
 		{ .iov_base = f->wbase, .iov_len = f->wpos-f->wbase },
 		{ .iov_base = (void *)buf, .iov_len = len }
@@ -31,4 +44,30 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 		iov[0].iov_base = (char *)iov[0].iov_base + cnt;
 		iov[0].iov_len -= cnt;
 	}
+	#else
+		//using write for now
+		struct ringleader* rl = get_ringleader();
+		void* shmem = get_rl_shmem();
+		memcpy(shmem, buf, len);
+		int32_t id = ringleader_prep_write(rl, f->fd, shmem, len, 0);
+        ringleader_set_user_data(rl, id, (void *) WRITE_COOKIE);
+        ringleader_submit(rl);
+		syscall(SYS_sched_yield);
+
+		struct io_uring_cqe *cqe;
+		while(1) {
+        cqe = ringleader_peek_cqe(rl);
+        if(cqe != NULL){
+			if((uint64_t) cqe->user_data == WRITE_COOKIE){
+				__s32 ret = cqe->res;
+				ringleader_consume_cqe(rl, cqe);
+				return ret;
+			} else {
+				certikos_puts("Did not get expected ringleader write completion token");
+                exit(-1);
+				return 0;
+			}
+		}}
+		
+#endif
 }
