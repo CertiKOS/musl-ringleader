@@ -6,7 +6,7 @@
 #define MIN_ENTRIES 16
 #define SHMEM_SIZE 0x4000
 
-uint64_t shmem_cookie = 1324783;
+uint64_t shmem_cookie = 0u;
 
 //NULL RETURNS INDICATE ERRORS
 
@@ -35,6 +35,10 @@ struct ringleader* get_ringleader(void){
 }
 
 //modify this to be more dynamic and allow more than 4kb of memory
+
+// TODO: user data reprsents waht type of io_uring mapping is done, for now use
+// IORING_OFF_SQ_RING =0
+// this is passed to the mmap offset
 void *get_rl_shmem(void){
     struct ringleader* rl = get_ringleader();
 

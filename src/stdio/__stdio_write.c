@@ -48,8 +48,10 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 		//using write for now
 		struct ringleader* rl = get_ringleader();
 		void* shmem = get_rl_shmem();
-		memcpy(shmem, buf, len);
-		int32_t id = ringleader_prep_write(rl, f->fd, shmem, len, 0);
+		//get shmem
+		memcpy(shmem, f->wbase, f->wpos-f->wbase);
+		memcpy((char *)shmem + (f->wpos - f->wbase), buf, len);
+		int32_t id = ringleader_prep_write(rl, f->fd, shmem, len + (size_t) (f->wpos - f->wbase), 0);
         ringleader_set_user_data(rl, id, (void *) WRITE_COOKIE);
         ringleader_submit(rl);
 		syscall(SYS_sched_yield);
