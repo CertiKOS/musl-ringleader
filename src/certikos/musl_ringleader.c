@@ -10,18 +10,12 @@ uint64_t shmem_cookie = 0u;
 
 //NULL RETURNS INDICATE ERRORS
 
-//This function will need synchronization locks and a initialization flag
-
-//when do I need to consume, and also the add vs. set vs. prep differences
-
 struct ringleader* get_ringleader(void){
     static struct ringleader * rl = NULL;
 
     if(rl != NULL){
         return rl;
     }
-
-    //TODO bcifu: THIS IS CAUSING PROBLEM ATM BC IT USES CALLOC
     rl = ringleader_factory(MIN_ENTRIES);
     err_t err;
     while((err = ringleader_init_finished(rl)) == ERR_NOT_READY) {}
@@ -34,7 +28,7 @@ struct ringleader* get_ringleader(void){
     return rl;
 }
 
-//modify this to be more dynamic and allow more than 4kb of memory
+//TODO: modify this to be more dynamic and allow more than 4kb of memory using shmem malloc when that is completed
 
 // TODO: user data reprsents waht type of io_uring mapping is done, for now use
 // IORING_OFF_SQ_RING =0

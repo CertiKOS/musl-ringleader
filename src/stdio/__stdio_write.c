@@ -4,13 +4,6 @@
 #include <sys/uio.h>
 #include <string.h>
 
-//this is used by everything, modify me
-// will need shard memory address
-
-//for now use write, then switch to writev, the issue is we will need to also fix all addresses
-// inside teh struct
-// or like define things as offsets
-
 #define WRITE_COOKIE (2020859)
 
 size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
@@ -40,13 +33,12 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 	int iovcnt = 2;
 	ssize_t cnt;
 
-	//TODO figure out this loops logic
 	for (;;) {
 
 		#ifndef _CERTIKOS_
 			cnt = syscall(SYS_writev, f->fd, iov, iovcnt);
 		#else
-			int32_t id = ringleader_prep_writev(rl, f->fd, iov, iovcnt, 0);
+			int32_t id = ringleader_prep_writev(rl, f->fd, iov, iovcnt, 0, 1);
 			ringleader_set_user_data(rl, id, (void *) WRITE_COOKIE);
 			ringleader_submit(rl);
 			syscall(SYS_sched_yield);
@@ -84,7 +76,6 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 			iov++; iovcnt--;
 		}
 
-		//I NEED TO FIX THIS UPDATE THING AND DEAL WITH THAT I BONK THE IOV
 		iov[0].iov_base = (char *)iov[0].iov_base + cnt;
 		iov[0].iov_len -= cnt;
 	}
