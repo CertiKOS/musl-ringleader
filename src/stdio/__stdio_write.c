@@ -38,7 +38,7 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 		#ifndef _CERTIKOS_
 			cnt = syscall(SYS_writev, f->fd, iov, iovcnt);
 		#else
-			int32_t id = ringleader_prep_writev(rl, f->fd, iov, iovcnt, 0, 1);
+			int32_t id = ringleader_prep_writev(rl, f->fd, iov, iovcnt, 0);
 			ringleader_set_user_data(rl, id, (void *) WRITE_COOKIE);
 			ringleader_submit(rl);
 			syscall(SYS_sched_yield);
@@ -48,11 +48,10 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 				__s32 ret = cqe->res;
 				ringleader_consume_cqe(rl, cqe);
 				cnt = ret;
-				break;
 			} else {
-				certikos_puts("Did not get expected ringleader write completion token");
+                ringleader_consume_cqe(rl, cqe);
+                certikos_puts("Did not get expected ringleader write completion token");
 				cnt = 0;
-				break;
 			}
 			
 		#endif

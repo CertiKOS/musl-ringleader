@@ -51,5 +51,6 @@ void *get_rl_shmem(void){
     } else {
         certikos_puts("Did not get expected ringleader completion token");
         exit(-1);
+        return NULL;
     }
 }
