@@ -43,21 +43,18 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 			ringleader_submit(rl);
 			syscall(SYS_sched_yield);
 
-			struct io_uring_cqe *cqe;
-			while(1) {
-			cqe = ringleader_peek_cqe(rl);
-			if(cqe != NULL){
-				if((uint64_t) cqe->user_data == WRITE_COOKIE){
-					__s32 ret = cqe->res;
-					ringleader_consume_cqe(rl, cqe);
-					cnt = ret;
-					break;
-				} else {
-					certikos_puts("Did not get expected ringleader write completion token");
-					cnt = 0;
-					break;
-				}
-			}}
+			struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
+			if((uint64_t) cqe->user_data == WRITE_COOKIE){
+				__s32 ret = cqe->res;
+				ringleader_consume_cqe(rl, cqe);
+				cnt = ret;
+				break;
+			} else {
+				certikos_puts("Did not get expected ringleader write completion token");
+				cnt = 0;
+				break;
+			}
+			
 		#endif
 		
 		if (cnt == rem) {
