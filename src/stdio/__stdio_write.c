@@ -1,10 +1,13 @@
 #include "stdio_impl.h"
-#include "certikos_impl.h"
-#include "ringleader.h"
 #include <sys/uio.h>
 #include <string.h>
 
+#ifdef _CERTIKOS_
+#include "certikos_impl.h"
+#include "ringleader.h"
 #define WRITE_COOKIE (2020859)
+#endif
+
 
 size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 {

@@ -42,9 +42,11 @@ FILE *__fdopen(int fd, const char *mode)
 	f->buf_size = BUFSIZ;
 
 	/* Activate line buffered mode for terminals */
+	#ifndef _CERTIKOS_
 	f->lbf = EOF;
 	if (!(f->flags & F_NOWR) && !__syscall(SYS_ioctl, fd, TIOCGWINSZ, &wsz))
-		f->lbf = '\n';
+		f->lbf = '\n'; 
+	#endif
 
 	/* Initialize op ptrs. No problem if some are unneeded. */
 	f->read = __stdio_read;

@@ -10,7 +10,9 @@ static void close_file(FILE *f)
 	if (!f) return;
 	FFINALLOCK(f);
 	if (f->wpos != f->wbase) f->write(f, 0, 0);
-	if (f->rpos != f->rend) f->seek(f, f->rpos-f->rend, SEEK_CUR);
+	#ifndef _CERTIKOS_
+		if (f->rpos != f->rend) f->seek(f, f->rpos-f->rend, SEEK_CUR);
+	#endif
 }
 
 void __stdio_exit(void)
