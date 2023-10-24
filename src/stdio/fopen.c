@@ -36,16 +36,15 @@ FILE *fopen(const char *restrict filename, const char *restrict mode)
 		strcpy(shmem, filename);
 		//uses flags in flags, and mode from mode
 		// int32_t id = ringleader_prep_openat(rl, shmem, flags & (O_RDWR | O_RDONLY | O_WRONLY), flags);
-		int32_t id = ringleader_prep_openat(rl, shmem, O_RDWR, 0666);
+		certikos_printf("Some debugging: %X %X %X %X\n%X\n", O_RDONLY, O_WRONLY, O_RDWR, O_CREAT, flags);
+
+		int32_t id = ringleader_prep_openat(rl, shmem, flags, 0666);
 		ringleader_set_user_data(rl, id, (void*) OPENAT_COOKIE);
 
 		ringleader_submit(rl);
 		syscall(SYS_sched_yield);
 
-		certikos_puts("Prepped");
-
 		struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
-		certikos_puts("Got");
 		if((uint64_t) cqe->user_data == OPENAT_COOKIE){
 			fd = cqe->res;
 			ringleader_consume_cqe(rl, cqe);
