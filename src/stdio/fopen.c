@@ -36,7 +36,7 @@ FILE *fopen(const char *restrict filename, const char *restrict mode)
 		strcpy(shmem, filename);
 		//uses flags in flags, and mode from mode
 		// int32_t id = ringleader_prep_openat(rl, shmem, flags & (O_RDWR | O_RDONLY | O_WRONLY), flags);
-		int32_t id = ringleader_prep_openat(rl, shmem, O_RDWR, 0);
+		int32_t id = ringleader_prep_openat(rl, shmem, O_RDWR, 0666);
 		ringleader_set_user_data(rl, id, (void*) OPENAT_COOKIE);
 
 		ringleader_submit(rl);
