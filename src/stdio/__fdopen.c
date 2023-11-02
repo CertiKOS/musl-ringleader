@@ -24,9 +24,9 @@ FILE *__fdopen(int fd, const char *mode)
 	/* Allocate FILE+buffer or fail */
 	//TODO I am worried that there may be some assumptions somehwere that it is contiguous
 	// #ifndef _CERTIKOS_
-	// if (!(f=malloc(sizeof *f + UNGET + BUFSIZ))) return 0;
+	if (!(f=malloc(sizeof *f + UNGET + BUFSIZ))) return 0;
 	// #else
-	if (!(f=malloc(sizeof *f + UNGET))) return 0;
+	// if (!(f=malloc(sizeof *f + UNGET))) return 0;
 	// #endif
 
 	/* Zero-fill only the struct, not the buffer */
