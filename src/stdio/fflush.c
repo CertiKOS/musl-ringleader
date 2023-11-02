@@ -9,6 +9,9 @@ int fflush(FILE *f)
 {
 	if (!f) {
 		int r = 0;
+
+		//I think these are somehow causing an infinity loop, like its defined as zero and then flushing to itself???
+		//TODO: MAYBE NOT: I'M CONFUSED
 		if (__stdout_used) r |= fflush(__stdout_used);
 		if (__stderr_used) r |= fflush(__stderr_used);
 
@@ -34,7 +37,10 @@ int fflush(FILE *f)
 	}
 
 	/* If reading, sync position, per POSIX */
+	//TODO: Fix seeking to be POSIX compliant
+	#ifndef _CERTIKOS_
 	if (f->rpos != f->rend) f->seek(f, f->rpos-f->rend, SEEK_CUR);
+	#endif
 
 	/* Clear read and write modes */
 	f->wpos = f->wbase = f->wend = 0;

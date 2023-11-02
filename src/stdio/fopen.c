@@ -32,11 +32,8 @@ FILE *fopen(const char *restrict filename, const char *restrict mode)
 	#else
 	//TODO: Need to do this later fcntl in for fd_cloexec
 		struct ringleader *rl = get_ringleader();
-		void* shmem = get_rl_shmem();
+		void* shmem = get_rl_shmem_singleton();
 		strcpy(shmem, filename);
-		//uses flags in flags, and mode from mode
-		// int32_t id = ringleader_prep_openat(rl, shmem, flags & (O_RDWR | O_RDONLY | O_WRONLY), flags);
-		certikos_printf("Some debugging: %X %X %X %X\n%X\n", O_RDONLY, O_WRONLY, O_RDWR, O_CREAT, flags);
 
 		int32_t id = ringleader_prep_openat(rl, shmem, flags, 0666);
 		ringleader_set_user_data(rl, id, (void*) OPENAT_COOKIE);
@@ -50,6 +47,7 @@ FILE *fopen(const char *restrict filename, const char *restrict mode)
 			ringleader_consume_cqe(rl, cqe);
 			if (fd < 0) return 0;
 		} else {
+			ringleader_consume_cqe(rl, cqe);
 			certikos_puts("Did not get expected RL openat completion token");
 			return 0;
 		}

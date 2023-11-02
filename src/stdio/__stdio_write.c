@@ -18,7 +18,7 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 	};
 	#else 
 		struct ringleader* rl = get_ringleader();
-		void* shmem = get_rl_shmem();
+		void* shmem = get_rl_shmem_singleton();
 		struct iovec *iovs = (struct iovec *) shmem;
 
 		size_t block_two_offset = len;
@@ -41,7 +41,8 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 		#ifndef _CERTIKOS_
 			cnt = syscall(SYS_writev, f->fd, iov, iovcnt);
 		#else
-			int32_t id = ringleader_prep_writev(rl, f->fd, iov, iovcnt, 0);
+		//ISSUE, ITS TAKING -1 as the positive signed address, instead of -1 the location to write to
+			int32_t id = ringleader_prep_writev(rl, f->fd, iov, iovcnt, -1);
 			ringleader_set_user_data(rl, id, (void *) WRITE_COOKIE);
 			ringleader_submit(rl);
 			syscall(SYS_sched_yield);

@@ -19,7 +19,7 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
 	#else
 	//TODO should be buff size
 	struct ringleader* rl = get_ringleader();
-	void *shmem = get_rl_shmem();
+	void *shmem = get_rl_shmem_singleton();
 	struct iovec *iov = (struct iovec *) shmem;
  
 	iov[0] = (struct iovec) {.iov_base = iov + 2, .iov_len = len - !!f->buf_size};
@@ -33,10 +33,10 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
 		: syscall(SYS_read, f->fd, iov[1].iov_base, iov[1].iov_len);
 	#else 
 	if(iov[0].iov_len){
-		int32_t id = ringleader_prep_readv(rl, f->fd, iov, 2, 0);
+		int32_t id = ringleader_prep_readv(rl, f->fd, iov, 2, -1);
 		ringleader_set_user_data(rl, id, (void *) READV_COOKIE);		
 	} else {
-		int32_t id = ringleader_prep_read(rl, f->fd, iov[1].iov_base, iov[1].iov_len, 0);
+		int32_t id = ringleader_prep_read(rl, f->fd, iov[1].iov_base, iov[1].iov_len, -1);
         ringleader_set_user_data(rl, id, (void*)READ_COOKIE);
     }
     ringleader_submit(rl);
@@ -53,6 +53,10 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
 		cnt = cqe->res;
 		ringleader_consume_cqe(rl, cqe);
         memcpy(f->buf, (iov + 2) + (size_t)(len - !!f->buf_size), f->buf_size);
+    } else {
+        ringleader_consume_cqe(rl, cqe);
+        certikos_puts("Did not get expected ringleader read completion token");
+        cnt = 0;
     }
 	#endif
 	if (cnt <= 0) {
