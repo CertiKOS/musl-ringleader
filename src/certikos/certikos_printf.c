@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdarg.h>
 
+FILE certikos_stdout = {.flags = F_ENCLAVE_TERMINAL};
+
 int certikos_printf(const char *restrict fmt, ...){
     int ret;
     va_list ap;

@@ -605,6 +605,7 @@
 #define __NR_landlock_add_rule       1298
 #define __NR_landlock_restrict_self  1299
 #define __NR_certikos_puts 0
+#define SYSCALL_CP_WAS_USED 2000
 
 
 #endif /* _CERTIKOS_ */

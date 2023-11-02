@@ -19,7 +19,11 @@ __cp_begin:
 	ldr w0,[x0]
 	cbnz w0,__cp_cancel
 	mov x8,x1
+	#ifndef _CERTIKOS_
 	mov x0,x2
+	#else
+	mov x0, #2000
+	#endif
 	mov x1,x3
 	mov x2,x4
 	mov x3,x5

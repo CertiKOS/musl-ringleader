@@ -6,8 +6,6 @@
 #include <certikos.h>
 #include "stdio_impl.h"
 
-static FILE certikos_stdout = {.flags = F_ENCLAVE_TERMINAL};
-
 struct ringleader* get_ringleader(void);
 void *get_rl_shmem_singleton(void);
 void *alloc_new_rl_shmem(int size);
