@@ -32,11 +32,11 @@ int connect(int fd, const struct sockaddr *addr, socklen_t len)
 	if(cqe->user_data == CONNECT_COOKIE){
 		int ret = cqe->res;
 		ringleader_consume_cqe(rl, cqe);
-		__syscall_ret(ret);
+		return __syscall_ret(ret);
 	} else {
 		ringleader_consume_cqe(rl, cqe);
 		certikos_puts("Did not get expected ringleader connection cookie");
-		__syscall_ret(-EINVAL);
+		return __syscall_ret(-EINVAL);
 	}
 	#endif
 }

@@ -27,11 +27,11 @@ ssize_t send(int fd, const void *buf, size_t len, int flags)
 	if(cqe->user_data == SEND_COOKIE){
 		int ret = cqe->res;
 		ringleader_consume_cqe(rl, cqe);
-		__syscall_ret(ret);
+		return __syscall_ret(ret);
 	} else {
 		ringleader_consume_cqe(rl, cqe);
 		certikos_puts("Did not get expected ringleader send cookie");
-		__syscall_ret(-EINVAL);
+		return __syscall_ret(-EINVAL);
 	}
 	#endif
 }

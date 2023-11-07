@@ -32,7 +32,7 @@ ssize_t recv(int fd, void *buf, size_t len, int flags)
 	} else {
         ringleader_consume_cqe(rl, cqe);
         certikos_puts("Did not get expected ringleader recv cookie");
-        __syscall_ret(-EINVAL);
+        return __syscall_ret(-EINVAL);
     }
 	#endif
 }
