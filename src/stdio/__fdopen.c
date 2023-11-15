@@ -23,11 +23,11 @@ FILE *__fdopen(int fd, const char *mode)
 
 	/* Allocate FILE+buffer or fail */
 	//TODO I am worried that there may be some assumptions somehwere that it is contiguous
-	// #ifndef _CERTIKOS_
+	#ifndef _CERTIKOS_
 	if (!(f=malloc(sizeof *f + UNGET + BUFSIZ))) return 0;
-	// #else
-	// if (!(f=malloc(sizeof *f + UNGET))) return 0;
-	// #endif
+	#else
+	if (!(f=malloc(sizeof *f + UNGET))) return 0;
+	#endif
 
 	/* Zero-fill only the struct, not the buffer */
 	memset(f, 0, sizeof *f);
@@ -48,16 +48,16 @@ FILE *__fdopen(int fd, const char *mode)
 
 	f->fd = fd;
 
-	// #ifndef _CERTIKOS_
+	#ifndef _CERTIKOS_
 	f->buf = (unsigned char *)f + sizeof *f + UNGET;
-	// #else
-	// void *buf = alloc_new_rl_shmem(BUFSIZ);
-	// if(buf == NULL){
-	// 	free(f);
-	// 	return 0;
-	// }
-	// f->buf = buf;
-	// #endif
+	#else
+	void *buf = alloc_new_rl_shmem(BUFSIZ);
+	if(buf == NULL){
+		free(f);
+		return 0;
+	}
+	f->buf = buf;
+	#endif
 
 	f->buf_size = BUFSIZ;
 
@@ -69,6 +69,7 @@ FILE *__fdopen(int fd, const char *mode)
 	#endif
 
 	/* Initialize op ptrs. No problem if some are unneeded. */
+	//TODO free shmem
 	f->read = __stdio_read;
 	f->write = __stdio_write;
 	f->seek = __stdio_seek;

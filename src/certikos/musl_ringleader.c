@@ -2,11 +2,13 @@
 #include "ringleader.h"
 #include "syscall.h"
 #include <stdatomic.h>
+#include <limits.h>
 
 #define MIN_ENTRIES 16
 #define SHMEM_SIZE  0x4000
 
-uint64_t shmem_cookie = 0u;
+uint64_t shmem_cookie =      0x7f7f7f7f00000000;
+uint64_t shmem_cookie_mask = 0xffffffff00000000;
 
 // NULL RETURNS INDICATE ERRORS
 
@@ -46,12 +48,13 @@ get_ringleader(void)
 int
 create_rl_shmem(struct ringleader* rl, int size)
 {
+    shmem_cookie += 4096; //TODO replace magic with pagesize variable.
     if (ringleader_request_shmem(rl, size, (void*)shmem_cookie) != ERR_OK)
     {
         return -1;
     }
     struct io_uring_cqe* cqe = ringleader_get_cqe(rl);
-    if ((uint64_t)cqe->user_data == shmem_cookie)
+    if ((uint64_t)(cqe->user_data & shmem_cookie_mask) == (shmem_cookie & shmem_cookie_mask))
     {
         if (ringleader_add_shmem(rl, cqe, size) == ERR_OK)
         {
@@ -95,7 +98,7 @@ alloc_new_rl_shmem(int size)
 {
     // ensure the singleton is already allocated
 
-    if (get_rl_shmem_singleton() == -1)
+    if (get_rl_shmem_singleton() == NULL)
         return NULL;
 
     struct ringleader* rl    = get_ringleader();
