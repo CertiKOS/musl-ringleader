@@ -23,7 +23,7 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
 	struct iovec *iov = (struct iovec *) shmem;
  
 	iov[0] = (struct iovec) {.iov_base = iov + 2, .iov_len = len - !!f->buf_size};
-	iov[1] = (struct iovec) {.iov_base = (iov + 2) + (size_t) (len - !!f->buf_size), . iov_len = f->buf_size};
+	iov[1] = (struct iovec) {.iov_base = f->buf, .iov_len = f->buf_size};
 	#endif
 
 	ssize_t cnt;
@@ -48,11 +48,9 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
         cnt = cqe->res;
         ringleader_consume_cqe(rl, cqe);
         memcpy(buf, iov + 2, len - !!f->buf_size);
-        memcpy(f->buf, (iov + 2) + (size_t)(len - !!f->buf_size), f->buf_size);
     } else if ((uint64_t) cqe->user_data == READ_COOKIE){
 		cnt = cqe->res;
 		ringleader_consume_cqe(rl, cqe);
-        memcpy(f->buf, (iov + 2) + (size_t)(len - !!f->buf_size), f->buf_size);
     } else {
         ringleader_consume_cqe(rl, cqe);
         certikos_puts("Did not get expected ringleader read completion token");
