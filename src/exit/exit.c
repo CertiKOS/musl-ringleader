@@ -2,6 +2,11 @@
 #include <stdint.h>
 #include "libc.h"
 
+#ifdef _CERTIKOS_
+#include "ringleader.h"
+#include "certikos_impl.h"
+#endif
+
 static void dummy()
 {
 }
@@ -29,5 +34,11 @@ _Noreturn void exit(int code)
 	__funcs_on_exit();
 	__libc_exit_fini();
 	__stdio_exit();
+	#ifdef _CERTIKOS_
+	if(ringleader_allocated()){
+        struct ringleader *rl = get_ringleader();
+        ringleader_exit_proxy(rl, code);
+    }
+	#endif
 	_Exit(code);
 }

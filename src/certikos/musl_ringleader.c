@@ -12,18 +12,18 @@ uint64_t shmem_cookie_mask = 0xffffffff00000000;
 
 // NULL RETURNS INDICATE ERRORS
 
+static struct ringleader *static_rl = NULL;
+
 struct ringleader*
 get_ringleader(void)
 {
-    static struct ringleader* rl = NULL;
-
-    if (rl != NULL)
+    if (static_rl != NULL)
     {
-        return rl;
+        return static_rl;
     }
-    rl = ringleader_factory(MIN_ENTRIES);
+    static_rl = ringleader_factory(MIN_ENTRIES);
     err_t err;
-    while ((err = ringleader_init_finished(rl)) == ERR_NOT_READY)
+    while ((err = ringleader_init_finished(static_rl)) == ERR_NOT_READY)
     {
     }
 
@@ -33,9 +33,12 @@ get_ringleader(void)
         return NULL;
     }
 
-    return rl;
+    return static_rl;
 }
 
+int ringleader_allocated(void){
+    return static_rl != NULL;
+}
 
 // allocate a new block of memory
 // goes at the last block

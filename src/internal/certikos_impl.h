@@ -7,6 +7,7 @@
 #include "stdio_impl.h"
 
 struct ringleader* get_ringleader(void);
+int ringleader_allocated(void);
 void *get_rl_shmem_singleton(void);
 void *alloc_new_rl_shmem(int size);
 
