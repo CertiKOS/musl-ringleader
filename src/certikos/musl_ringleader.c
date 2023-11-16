@@ -36,19 +36,13 @@ get_ringleader(void)
     return rl;
 }
 
-// TODO: modify this to be more dynamic and allow more than 4kb of memory using
-// shmem malloc when that is completed
-
-// TODO: user data reprsents waht type of io_uring mapping is done, for now use
-// IORING_OFF_SQ_RING =0
-// this is passed to the mmap offset
 
 // allocate a new block of memory
 // goes at the last block
 int
 create_rl_shmem(struct ringleader* rl, int size)
 {
-    shmem_cookie += 4096; //TODO replace magic with pagesize variable.
+    shmem_cookie += 1;
     if (ringleader_request_shmem(rl, size, (void*)shmem_cookie) != ERR_OK)
     {
         return -1;
@@ -79,18 +73,22 @@ create_rl_shmem(struct ringleader* rl, int size)
 void*
 get_rl_shmem_singleton(void)
 {
-    struct ringleader* rl = get_ringleader();
+    static void* shmem = NULL;
 
-    if (rl->shmem_size == 0)
+    if(!shmem)
     {
-        if (create_rl_shmem(rl, SHMEM_SIZE) == -1)
+        // TODO: modify this to be more dynamic and allow more than 4 pages of
+        // memory using shmem malloc when that is completed
+        struct ringleader* rl = get_ringleader();
+        size_t idx = create_rl_shmem(rl, SHMEM_SIZE);
+
+        if(idx < 0)
             return NULL;
-        return rl->shmem[0].addr;
+
+        shmem = rl->shmem[idx].addr;
     }
-    else
-    {
-        return rl->shmem[0].addr;
-    }
+
+    return shmem;
 }
 
 void*
