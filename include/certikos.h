@@ -1,6 +1,7 @@
-#ifndef _CERITKOS_H_
+#ifndef _CERTIKOS_H_
 #define _CERTIKOS_H_
 #include <stdlib.h>
+#include <stdint.h>
 #include <ringleader.h>
 
 /* Return the offset of 'member' relative to the beginning of a struct type */
@@ -11,6 +12,9 @@
         const __typeof__(((type*)0)->member)* __mptr = (ptr); \
         (type*)((char*)__mptr - offsetof(type, member));      \
     })
+
+
+
 
 int sys_io_uring_setup(uint32_t entries, struct io_uring_params *p);
 
