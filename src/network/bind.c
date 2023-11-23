@@ -9,6 +9,8 @@
 #define BIND_COOKIE (1927814)
 #endif
 
+
+//TODO currently not workings
 int bind(int fd, const struct sockaddr *addr, socklen_t len)
 {
 	#ifndef _CERTIKOS_
