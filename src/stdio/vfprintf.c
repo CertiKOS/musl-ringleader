@@ -689,6 +689,10 @@ int vfprintf(FILE *restrict f, const char *restrict fmt, va_list ap)
 	}
 
 	FLOCK(f);
+	#ifdef _CERTIKOS_
+	if(stdio_ensure_shmem_buf(f) < 0) return 0;
+	#endif
+
 	olderr = f->flags & F_ERR;
 	f->flags &= ~F_ERR;
 	if (!f->buf_size) {
