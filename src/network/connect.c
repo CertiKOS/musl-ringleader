@@ -14,10 +14,6 @@ int connect(int fd, const struct sockaddr *addr, socklen_t len)
 	#ifndef _CERTIKOS_
 	return socketcall_cp(connect, fd, addr, len, 0, 0, 0);
 	#else
-    // lengthi s size of teh struct
-    // TODO I'm wroried about a sockaddr with additional pointers...
-    // Tho doesn't seem like any have that
-    // https://man7.org/linux/man-pages/man3/sockaddr.3type.html
     struct ringleader* rl = get_ringleader();
 	void* shmem = get_rl_shmem_singleton();
 	memcpy(shmem, addr, len);
