@@ -18,7 +18,7 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 	};
 	#else 
 		if(stdio_ensure_shmem_buf(f) < 0) return 0;
-		
+
 		struct ringleader* rl = get_ringleader();
 		void* shmem = get_rl_shmem_singleton();
 		struct iovec *iovs = (struct iovec *) shmem;
