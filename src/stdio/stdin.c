@@ -2,10 +2,18 @@
 
 #undef stdin
 
+#ifndef _CERTIKOS_
 static unsigned char buf[BUFSIZ+UNGET];
+#endif
+
 hidden FILE __stdin_FILE = {
+	#ifndef _CERTIKOS_
 	.buf = buf+UNGET,
 	.buf_size = sizeof buf-UNGET,
+	#else
+	.buf = NULL,
+	.buf_size = 0,
+	#endif
 	.fd = 0,
 	.flags = F_PERM | F_NOWR,
 	.read = __stdio_read,

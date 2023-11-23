@@ -17,6 +17,7 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
 		{ .iov_base = f->buf, .iov_len = f->buf_size }
 	};
 	#else
+	if(stdio_ensure_shmem_buf(f) < 0) return 0;
 	//TODO should be buff size
 	struct ringleader* rl = get_ringleader();
 	void *shmem = get_rl_shmem_singleton();

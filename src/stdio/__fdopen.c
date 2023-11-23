@@ -26,7 +26,7 @@ FILE *__fdopen(int fd, const char *mode)
 	#ifndef _CERTIKOS_
 	if (!(f=malloc(sizeof *f + UNGET + BUFSIZ))) return 0;
 	#else
-	if (!(f=malloc(sizeof *f + UNGET))) return 0;
+	if (!(f=malloc(sizeof *f))) return 0;
 	#endif
 
 	/* Zero-fill only the struct, not the buffer */
@@ -51,12 +51,12 @@ FILE *__fdopen(int fd, const char *mode)
 	#ifndef _CERTIKOS_
 	f->buf = (unsigned char *)f + sizeof *f + UNGET;
 	#else
-	void *buf = alloc_new_rl_shmem(BUFSIZ);
+	unsigned char *buf = alloc_new_rl_shmem(BUFSIZ + UNGET);
 	if(buf == NULL){
 		free(f);
 		return 0;
 	}
-	f->buf = buf;
+	f->buf = buf + UNGET;
 	#endif
 
 	f->buf_size = BUFSIZ;
