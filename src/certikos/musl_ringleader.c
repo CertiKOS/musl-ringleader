@@ -113,3 +113,4 @@ alloc_new_rl_shmem(int size)
         return rl->shmem[index].addr;
     }
 }
+

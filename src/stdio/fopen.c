@@ -35,7 +35,7 @@ FILE *fopen(const char *restrict filename, const char *restrict mode)
 		void* shmem = get_rl_shmem_singleton();
 		strcpy(shmem, filename);
 
-		int32_t id = ringleader_prep_openat(rl, shmem, flags, 0666);
+		int32_t id = ringleader_prep_open(rl, shmem, flags, 0666);
 		ringleader_set_user_data(rl, id, (void*) OPENAT_COOKIE);
 
 		ringleader_submit(rl);
