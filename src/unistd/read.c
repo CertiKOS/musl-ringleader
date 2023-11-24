@@ -20,13 +20,11 @@ ssize_t read(int fd, void *buf, size_t count)
 	return syscall_cp(SYS_read, fd, buf, count);
 	#else
 	struct ringleader *rl = get_ringleader();
-	void *shmem = get_rl_shmem_singleton();
+	void *shmem = alloc_new_rl_shmem(count + 1024);
 
 	if(shmem == NULL) return __syscall_ret(ENOMEM);
 
-	//TODO replace with either requesting a custom shmem each time, or using malloc and not having this min thing
-	//divid by 16 works
-	int32_t id = ringleader_prep_read(rl, fd, shmem, min(rl->shmem[0].size / 16, count), -1);
+	int32_t id = ringleader_prep_read(rl, fd, shmem, count, -1);
 	ringleader_set_user_data(rl, id, (void *) READ_COOKIE);
 	ringleader_submit(rl);
 	syscall(SYS_sched_yield);
