@@ -10,6 +10,10 @@
 #define READ_COOKIE (3705175)
 #endif
 
+static inline int min(const int a, const int b) {
+    return a < b ? a : b;
+}
+
 ssize_t read(int fd, void *buf, size_t count)
 {
 	#ifndef _CERTIKOS_
@@ -20,7 +24,9 @@ ssize_t read(int fd, void *buf, size_t count)
 
 	if(shmem == NULL) return __syscall_ret(ENOMEM);
 
-	int32_t id = ringleader_prep_read(rl, fd, shmem, count, -1);
+	//TODO replace with either requesting a custom shmem each time, or using malloc and not having this min thing
+	//divid by 16 works
+	int32_t id = ringleader_prep_read(rl, fd, shmem, min(rl->shmem[0].size / 16, count), -1);
 	ringleader_set_user_data(rl, id, (void *) READ_COOKIE);
 	ringleader_submit(rl);
 	syscall(SYS_sched_yield);
