@@ -49,6 +49,7 @@ create_rl_shmem(struct ringleader* rl, int size)
     shmem_cookie += 1;
     if (ringleader_request_shmem(rl, size, (void*)shmem_cookie) != ERR_OK)
     {
+        certikos_puts("Failed to request shmem\n");
         return NULL;
     }
 
