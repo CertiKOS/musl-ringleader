@@ -6,6 +6,7 @@
 #include "ringleader.h"
 
 #include <string.h>
+#include <stdio.h>
 
 #define READ_COOKIE (3705175)
 #endif
@@ -20,8 +21,7 @@ ssize_t read(int fd, void *buf, size_t count)
 	return syscall_cp(SYS_read, fd, buf, count);
 	#else
 	struct ringleader *rl = get_ringleader();
-	void *shmem = alloc_new_rl_shmem(count + 1024);
-
+	void *shmem = alloc_new_rl_shmem(count + 0x1000); //TODO can be smaller??
 	if(shmem == NULL) return __syscall_ret(ENOMEM);
 
 	int32_t id = ringleader_prep_read(rl, fd, shmem, count, -1);

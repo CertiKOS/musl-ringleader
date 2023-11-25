@@ -24,4 +24,4 @@ int stdio_ensure_shmem_buf(FILE* f){
     return 0;
 }
 
-#endif 
+#endif

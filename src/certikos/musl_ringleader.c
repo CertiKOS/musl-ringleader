@@ -29,7 +29,7 @@ get_ringleader(void)
 
     if (err != ERR_OK)
     {
-        certikos_printf("Failed to start ringleader, error %d", err);
+        certikos_printf("Failed to start ringleader, error %d\n", err);
         return NULL;
     }
 
@@ -42,34 +42,37 @@ int ringleader_allocated(void){
 
 // allocate a new block of memory
 // goes at the last block
-int
+void *
 create_rl_shmem(struct ringleader* rl, int size)
 {
+    void * ret;
     shmem_cookie += 1;
     if (ringleader_request_shmem(rl, size, (void*)shmem_cookie) != ERR_OK)
     {
-        return -1;
+        return NULL;
     }
+
     struct io_uring_cqe* cqe = ringleader_get_cqe(rl);
     if ((uint64_t)(cqe->user_data & shmem_cookie_mask) == (shmem_cookie & shmem_cookie_mask))
     {
-        if (ringleader_add_shmem(rl, cqe, size) == ERR_OK)
+        if (ringleader_add_shmem(rl, cqe, size, &ret) == ERR_OK)
         {
             ringleader_consume_cqe(rl, cqe);
-            return rl->shmem_size - 1;
+            return ret;
         }
         else
         {
+            certikos_puts("Failed to alloc shmem.\n");
             ringleader_consume_cqe(rl, cqe);
-            return -1;
+            return NULL;
         }
     }
     else
     {
         certikos_puts("Did not get expected ringleader completion token");
         exit(-1);
-        return -1;
     }
+    return NULL;
 }
 
 // always use first shmem for now, easier for deubgging, i.e. shmem singleton.
@@ -83,12 +86,11 @@ get_rl_shmem_singleton(void)
         // TODO: modify this to be more dynamic and allow more than 4 pages of
         // memory using shmem malloc when that is completed
         struct ringleader* rl = get_ringleader();
-        size_t idx = create_rl_shmem(rl, SHMEM_SIZE);
-
-        if(idx < 0)
-            return NULL;
-
-        shmem = rl->shmem[idx].addr;
+        shmem = create_rl_shmem(rl, SHMEM_SIZE);
+        if(!shmem)
+        {
+            certikos_puts("Failed to get singleton.\n");
+        }
     }
 
     return shmem;
@@ -97,20 +99,7 @@ get_rl_shmem_singleton(void)
 void*
 alloc_new_rl_shmem(int size)
 {
-    // ensure the singleton is already allocated
-
-    if (get_rl_shmem_singleton() == NULL)
-        return NULL;
-
     struct ringleader* rl    = get_ringleader();
-    int                index = create_rl_shmem(rl, size);
-    if (index == -1)
-    {
-        return NULL;
-    }
-    else
-    {
-        return rl->shmem[index].addr;
-    }
+    return create_rl_shmem(rl, size);
 }
 
