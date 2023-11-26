@@ -23,7 +23,13 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 		void* shmem = get_rl_shmem_singleton();
 		struct iovec *iovs = (struct iovec *) shmem;
 
-		iovs[0] = (struct iovec) {.iov_base = f->wbase, .iov_len = f->wpos-f->wbase};
+		//ensure that the file * buffer is in shared memory
+		if(ringleader_addr_in_shmem(rl, f->wbase)){
+			iovs[0] = (struct iovec) {.iov_base = f->wbase, .iov_len = f->wpos-f->wbase};
+		} else {
+			iovs[0] = (struct iovec) {.iov_base = (char *)&iovs[2] + len, .iov_len = f->wpos - f->wbase};
+			memcpy((char *)&iovs[2] + len, f->wbase, f->wpos-f->wbase);
+		}
 		iovs[1] = (struct iovec) {.iov_base = &iovs[2], len};
 
 		//copy past where the iovecs live
