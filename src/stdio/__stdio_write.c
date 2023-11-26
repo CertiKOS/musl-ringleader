@@ -27,6 +27,7 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 		if(ringleader_addr_in_shmem(rl, f->wbase)){
 			iovs[0] = (struct iovec) {.iov_base = f->wbase, .iov_len = f->wpos-f->wbase};
 		} else {
+			//todo make sure there is sufficient size
 			iovs[0] = (struct iovec) {.iov_base = (char *)&iovs[2] + len, .iov_len = f->wpos - f->wbase};
 			memcpy((char *)&iovs[2] + len, f->wbase, f->wpos-f->wbase);
 		}

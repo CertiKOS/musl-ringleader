@@ -41,6 +41,7 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
 		int32_t id = ringleader_prep_readv(rl, f->fd, iov, 2, -1);
 		ringleader_set_user_data(rl, id, (void *) READV_COOKIE);		
 	} else {
+		//todo make sure there is sufficient size
 		int32_t id = ringleader_prep_read(rl, f->fd, iov[1].iov_base, iov[1].iov_len, -1);
         ringleader_set_user_data(rl, id, (void*)READ_COOKIE);
     }
