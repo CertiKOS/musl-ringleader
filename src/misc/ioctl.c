@@ -159,7 +159,7 @@ int musl_ringleader_ioctl(int fd, int req, void* arg)
 	{
 		if(shmem == NULL) return -ENOMEM;
 		memcpy(shmem, arg, arg_size);
-		id = ringleader_prep_ioctl(rl, fd, req, (uint64_t)shmem);
+		id = ringleader_prep_ioctl(rl, fd, req, ringleader_calc_proxy_addr(rl, shmem));
 	}
 	else
 	{
