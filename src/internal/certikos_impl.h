@@ -6,6 +6,8 @@
 #include <certikos.h>
 #include "stdio_impl.h"
 
+#define SHMEM_SIZE  0x4000
+
 struct ringleader* get_ringleader(void);
 int ringleader_allocated(void);
 void *get_rl_shmem_singleton(void);

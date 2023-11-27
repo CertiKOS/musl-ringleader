@@ -75,12 +75,14 @@ static inline long __syscall6(long n, long a, long b, long c, long d, long e, lo
 }
 
 #else
+#include <certikos.h>
 
 #define __asm_syscall(...) do { \
 	__asm__ __volatile__ ( "svc 0" \
 	: "=r"(x1) : __VA_ARGS__ : "memory", "cc"); \
 	return x1; \
 	} while (0)
+
 
 static inline long __syscall0(long n)
 {
@@ -106,6 +108,14 @@ static inline long __syscall2(long n, long a, long b)
 
 static inline long __syscall3(long n, long a, long b, long c)
 {
+    /* MUSL RINGLEADER OVERRIDES */
+    switch(n)
+    {
+        case SYS_ioctl: return musl_ringleader_ioctl(a, b, (void*)c);
+        case SYS_getdents64: return musl_ringleader_getdents(a, (void*)b, c);
+        default: break;
+    }
+
 	register long x0 __asm__("x0") = n;
 	register long x1 __asm__("x1") = a;
 	register long x2 __asm__("x2") = b;

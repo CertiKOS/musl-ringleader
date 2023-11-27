@@ -519,7 +519,7 @@
 #define __NR_readahead               1212
 #define __NR_brk                     48
 #define __NR_munmap                  50
-#define __NR_mremap                  1215
+#define __NR_mremap                  51
 #define __NR_add_key                 1216
 #define __NR_request_key             1217
 #define __NR_keyctl                  1218

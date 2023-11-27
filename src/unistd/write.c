@@ -16,7 +16,9 @@ ssize_t write(int fd, const void *buf, size_t count)
 	return syscall_cp(SYS_write, fd, buf, count);
 	#else
 	struct ringleader *rl = get_ringleader();
-	void *shmem = alloc_new_rl_shmem(count + 0x1000); //TODO can be smaller??
+    //TODO how tight can this bound be
+	void *shmem = (count + 0x100 <= SHMEM_SIZE) ? get_rl_shmem_singleton() :
+		alloc_new_rl_shmem(count + 0x100);
 	if(shmem == NULL) return __syscall_ret(-ENOMEM);
 
 	memcpy(shmem, buf, count);

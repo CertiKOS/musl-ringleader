@@ -1,11 +1,11 @@
 #include "certikos_impl.h"
-#include "ringleader.h"
+#include <ringleader.h>
+#include <certikos.h>
 #include "syscall.h"
 #include <stdatomic.h>
 #include <limits.h>
 
 #define MIN_ENTRIES 16
-#define SHMEM_SIZE  0x4000
 
 uint64_t shmem_cookie =      0x7f7f7f7f00000000;
 uint64_t shmem_cookie_mask = 0xffffffff00000000;
@@ -47,11 +47,13 @@ create_rl_shmem(struct ringleader* rl, int size)
 {
     void * ret;
     shmem_cookie += 1;
+
     if (ringleader_request_shmem(rl, size, (void*)shmem_cookie) != ERR_OK)
     {
         certikos_puts("Failed to request shmem\n");
         return NULL;
     }
+
 
     struct io_uring_cqe* cqe = ringleader_get_cqe(rl);
     if ((uint64_t)(cqe->user_data & shmem_cookie_mask) == (shmem_cookie & shmem_cookie_mask))

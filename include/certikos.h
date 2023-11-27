@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <ringleader.h>
+#include <dirent.h>
 
 /* Return the offset of 'member' relative to the beginning of a struct type */
 #define offsetof(type, member)  __builtin_offsetof(type, member)
@@ -14,13 +15,14 @@
     })
 
 
-
-
 int sys_io_uring_setup(uint32_t entries, struct io_uring_params *p);
 
 int certikos_puts(const char* buf);
 int certikos_puts_length(const char* buf, int len);
 
 int certikos_printf(const char *restrict fmt, ...);
+
+int musl_ringleader_ioctl(int fd, int req, void* arg);
+int musl_ringleader_getdents(int fd, struct dirent *buf, unsigned int len);
 
 #endif /* _CERTIKOS_H_ */
