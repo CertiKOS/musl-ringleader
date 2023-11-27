@@ -148,6 +148,7 @@ int musl_ringleader_ioctl(int fd, int req, void* arg)
 			break;
         case FIONREAD:
             arg_size = sizeof(int);
+            break;
 		default:
 			certikos_printf("unknown ioctl req: 0x%x arg=%lx\n",
 					req, arg);
@@ -157,7 +158,7 @@ int musl_ringleader_ioctl(int fd, int req, void* arg)
 	if(arg_size > 0)
 	{
 		if(shmem == NULL) return -ENOMEM;
-		memcpy(shmem, (void*)arg, arg_size);
+		memcpy(shmem, arg, arg_size);
 		id = ringleader_prep_ioctl(rl, fd, req, (uint64_t)shmem);
 	}
 	else
