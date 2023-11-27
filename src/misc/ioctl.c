@@ -168,7 +168,6 @@ int musl_ringleader_ioctl(int fd, int req, void* arg)
 
 	ringleader_set_user_data(rl, id, (void *) IOCTL_COOKIE);
 	ringleader_submit(rl);
-	syscall(SYS_sched_yield);
 
 	struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
 	if((uint64_t) cqe->user_data == IOCTL_COOKIE) {

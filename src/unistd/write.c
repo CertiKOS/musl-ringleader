@@ -26,7 +26,6 @@ ssize_t write(int fd, const void *buf, size_t count)
 	int32_t id = ringleader_prep_write(rl, fd, shmem, count, -1);
 	ringleader_set_user_data(rl, id, (void *) WRITE_COOKIE);
 	ringleader_submit(rl);
-	syscall(SYS_sched_yield);
 
 	struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
 	if((uint64_t) cqe->user_data == WRITE_COOKIE){

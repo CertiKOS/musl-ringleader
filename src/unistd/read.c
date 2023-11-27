@@ -29,7 +29,6 @@ ssize_t read(int fd, void *buf, size_t count)
 	int32_t id = ringleader_prep_read(rl, fd, shmem, count, -1);
 	ringleader_set_user_data(rl, id, (void *) READ_COOKIE);
 	ringleader_submit(rl);
-	syscall(SYS_sched_yield);
 
 	struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
 	if((uint64_t) cqe->user_data == READ_COOKIE){
