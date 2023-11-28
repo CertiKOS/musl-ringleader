@@ -5,8 +5,6 @@
 #include "certikos_impl.h"
 #include "ringleader.h"
 #include <string.h>
-
-#define ACCEPT_COOKIE (3129646)
 #endif
 
 int accept(int fd, struct sockaddr *restrict addr, socklen_t *restrict len)

@@ -5,8 +5,6 @@
 #include <string.h>
 #include "certikos_impl.h"
 #include "ringleader.h"
-
-#define CONNECT_COOKIE (48821)
 #endif
 
 int connect(int fd, const struct sockaddr *addr, socklen_t len)

@@ -7,8 +7,6 @@
 
 #include <string.h>
 #include <stdio.h>
-
-#define READ_COOKIE (3705175)
 #endif
 
 static inline int min(const int a, const int b) {

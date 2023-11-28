@@ -5,8 +5,6 @@
 #include "certikos_impl.h"
 #include "ringleader.h"
 #include <string.h>
-
-#define LISTEN_COOKIE (3424060)
 #endif
 
 int listen(int fd, int backlog)

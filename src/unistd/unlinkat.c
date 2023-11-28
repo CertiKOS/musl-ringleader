@@ -6,8 +6,6 @@
 #include <string.h>
 #include "certikos_impl.h"
 #include "ringleader.h"
-
-#define UNLINK_COOKIE (1607102)
 #endif
 
 

@@ -13,7 +13,58 @@
 #include "certikos_impl.h"
 #include "ringleader.h"
 
-#define IOCTL_COOKIE (123897897)
+int musl_ringleader_ioctl(int fd, int req, void* arg)
+{
+	struct ringleader *rl = get_ringleader();
+	void *shmem = get_rl_shmem_singleton();
+	int32_t id;
+	size_t arg_size = 0;
+
+	switch(req)
+	{
+		case TIOCGWINSZ:
+		case TIOCSWINSZ:
+			arg_size = sizeof(struct winsize);
+			break;
+        case FIONREAD:
+            arg_size = sizeof(int);
+            break;
+		default:
+			certikos_printf("unknown ioctl req: 0x%x arg=%lx\n",
+					req, arg);
+			break;
+	}
+
+	if(arg_size > 0)
+	{
+		if(shmem == NULL) return -ENOMEM;
+		memcpy(shmem, arg, arg_size);
+		id = ringleader_prep_ioctl(rl, fd, req, ringleader_calc_proxy_addr(rl, shmem));
+	}
+	else
+	{
+		id = ringleader_prep_ioctl(rl, fd, req, (uint64_t)arg);
+	}
+
+	ringleader_set_user_data(rl, id, (void *) IOCTL_COOKIE);
+	ringleader_submit(rl);
+
+	struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
+	if((uint64_t) cqe->user_data == IOCTL_COOKIE) {
+		if(arg_size > 0)
+		{
+			memcpy(arg, shmem, arg_size);
+		}
+		__s32 ret = cqe->res;
+		ringleader_consume_cqe(rl, cqe);
+		return ret;
+	} else {
+		ringleader_consume_cqe(rl, cqe);
+		certikos_puts("Unxpected ringleader ioctl cookie\n");
+		return -EIO;
+	}
+
+}
 #endif
 
 #define alignof(t) offsetof(struct { char c; t x; }, x)
@@ -132,60 +183,6 @@ static void convert_ioctl_struct(const struct ioctl_compat_map *map, char *old, 
 	else memcpy(new+new_offset, old+old_offset, old_size-old_offset);
 }
 
-#ifdef _CERTIKOS_
-int musl_ringleader_ioctl(int fd, int req, void* arg)
-{
-	struct ringleader *rl = get_ringleader();
-	void *shmem = get_rl_shmem_singleton();
-	int32_t id;
-	size_t arg_size = 0;
-
-	switch(req)
-	{
-		case TIOCGWINSZ:
-		case TIOCSWINSZ:
-			arg_size = sizeof(struct winsize);
-			break;
-        case FIONREAD:
-            arg_size = sizeof(int);
-            break;
-		default:
-			certikos_printf("unknown ioctl req: 0x%x arg=%lx\n",
-					req, arg);
-			break;
-	}
-
-	if(arg_size > 0)
-	{
-		if(shmem == NULL) return -ENOMEM;
-		memcpy(shmem, arg, arg_size);
-		id = ringleader_prep_ioctl(rl, fd, req, ringleader_calc_proxy_addr(rl, shmem));
-	}
-	else
-	{
-		id = ringleader_prep_ioctl(rl, fd, req, (uint64_t)arg);
-	}
-
-	ringleader_set_user_data(rl, id, (void *) IOCTL_COOKIE);
-	ringleader_submit(rl);
-
-	struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
-	if((uint64_t) cqe->user_data == IOCTL_COOKIE) {
-		if(arg_size > 0)
-		{
-			memcpy(arg, shmem, arg_size);
-		}
-		__s32 ret = cqe->res;
-		ringleader_consume_cqe(rl, cqe);
-		return ret;
-	} else {
-		ringleader_consume_cqe(rl, cqe);
-		certikos_puts("Unxpected ringleader ioctl cookie\n");
-		return -EIO;
-	}
-
-}
-#endif
 
 
 int ioctl(int fd, int req, ...)

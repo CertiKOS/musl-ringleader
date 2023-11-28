@@ -6,8 +6,6 @@
 #ifdef _CERTIKOS_
 #include "certikos_impl.h"
 #include "ringleader.h"
-
-#define CLOSE_COOKIE (132413)
 #endif
 
 static int dummy(int fd)
@@ -28,7 +26,7 @@ int close(int fd)
 	int id = ringleader_prep_close(rl, fd);
 	ringleader_set_user_data(rl, id, (void*) CLOSE_COOKIE);
 	ringleader_submit(rl);
-	
+
 	syscall(SYS_sched_yield);
     struct io_uring_cqe* cqe = ringleader_get_cqe(rl);
     if (cqe->user_data == CLOSE_COOKIE)

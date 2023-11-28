@@ -6,7 +6,6 @@
 #ifdef _CERTIKOS_
 #include "ringleader.h"
 #include "certikos_impl.h"
-#define SOCKET_COOKIE (2841)
 #endif
 
 #ifdef _CERTIKOS_
@@ -52,7 +51,7 @@ int socket(int domain, int type, int protocol)
 	}
 	return __syscall_ret(s);
 	#else
-	
+
 	//repeat the logic from above of retrying without CLOEXEC and NONBLOCK, however we do not then set those up with fcntl because those are not present
 	//TODO
 	int s = ringleader_socket_helper(domain, type, protocol);

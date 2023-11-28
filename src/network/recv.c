@@ -4,8 +4,6 @@
 #include <string.h>
 #include "certikos_impl.h"
 #include "ringleader.h"
-
-#define RECV_COOKIE (2740787)
 #endif
 
 ssize_t recv(int fd, void *buf, size_t len, int flags)
@@ -26,7 +24,7 @@ ssize_t recv(int fd, void *buf, size_t len, int flags)
     struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
 	if(cqe->user_data == RECV_COOKIE){
 		if(cqe->res >= 0){
-			memcpy(buf, shmem, cqe->res);	
+			memcpy(buf, shmem, cqe->res);
 		}
 		int ret = cqe->res;
 		ringleader_consume_cqe(rl, cqe);

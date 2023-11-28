@@ -8,7 +8,6 @@
 #include <ringleader.h>
 #include <string.h>
 
-#define GETDENTS_COOKIE (1238000297)
 /* override in __syscall3 */
 int musl_ringleader_getdents(int fd, struct dirent *buf, unsigned int len)
 {

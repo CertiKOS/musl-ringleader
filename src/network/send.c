@@ -4,8 +4,6 @@
 #include <string.h>
 #include "certikos_impl.h"
 #include "ringleader.h"
-
-#define SEND_COOKIE (2445150)
 #endif
 
 ssize_t send(int fd, const void *buf, size_t len, int flags)

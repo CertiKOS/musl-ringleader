@@ -4,10 +4,7 @@
 #ifdef _CERTIKOS_
 #include "certikos_impl.h"
 #include "ringleader.h"
-
 #include <string.h>
-
-#define WRITE_COOKIE (2020860)
 #endif
 
 ssize_t write(int fd, const void *buf, size_t count)

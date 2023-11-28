@@ -108,13 +108,15 @@ static inline long __syscall2(long n, long a, long b)
 
 static inline long __syscall3(long n, long a, long b, long c)
 {
-    /* MUSL RINGLEADER OVERRIDES */
-    switch(n)
-    {
-        case SYS_ioctl: return musl_ringleader_ioctl(a, b, (void*)c);
-        case SYS_getdents64: return musl_ringleader_getdents(a, (void*)b, c);
-        default: break;
-    }
+	/* MUSL RINGLEADER OVERRIDES */
+	switch(n)
+	{
+		case SYS_ioctl: return musl_ringleader_ioctl(a, b, (void*)c);
+		case SYS_getdents64: return musl_ringleader_getdents(a, (void*)b, c);
+		case SYS_fcntl: return musl_ringleader_fcntl(a, b, c);
+		case SYS_openat: return musl_ringleader_openat(a, (void*)b, c, 0);
+		default: break;
+	}
 
 	register long x0 __asm__("x0") = n;
 	register long x1 __asm__("x1") = a;
@@ -125,6 +127,13 @@ static inline long __syscall3(long n, long a, long b, long c)
 
 static inline long __syscall4(long n, long a, long b, long c, long d)
 {
+	/* MUSL RINGLEADER OVERRIDES */
+	switch(n)
+	{
+		case SYS_openat: return musl_ringleader_openat(a, (void*)b, c, d);
+		default: break;
+	}
+
 	register long x0 __asm__("x0") = n;
 	register long x1 __asm__("x1") = a;
 	register long x2 __asm__("x2") = b;

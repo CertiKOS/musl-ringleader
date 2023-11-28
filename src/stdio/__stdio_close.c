@@ -18,7 +18,6 @@ int __stdio_close(FILE *f)
 	#ifndef _CERTIKOS_
 	return syscall(SYS_close, __aio_close(f->fd));
 	#else
-#define CLOSE_COOKIE (15324)
 
     struct ringleader* rl = get_ringleader();
 	int32_t id = ringleader_prep_close(rl, f->fd);

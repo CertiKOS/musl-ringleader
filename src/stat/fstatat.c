@@ -10,7 +10,6 @@
 #ifdef _CERTIKOS_
 #include "certikos_impl.h"
 #include "ringleader.h"
-#define STATX_COOKIE (2150650)
 #endif
 
 struct statx {
@@ -154,7 +153,7 @@ int __fstatat(int fd, const char *restrict path, struct stat *restrict st, int f
 		#else
 			ret = fstatat_statx(fd, path, st, flag);
 		#endif
-	#else 
+	#else
 		//certikos handling here
 		struct ringleader *rl = get_ringleader();
 		void *shmem = get_rl_shmem_singleton();

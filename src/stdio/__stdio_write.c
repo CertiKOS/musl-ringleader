@@ -5,7 +5,6 @@
 #ifdef _CERTIKOS_
 #include "certikos_impl.h"
 #include "ringleader.h"
-#define WRITE_COOKIE (2020859)
 #endif
 
 
@@ -16,7 +15,7 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 		{ .iov_base = f->wbase, .iov_len = f->wpos-f->wbase },
 		{ .iov_base = (void *)buf, .iov_len = len }
 	};
-	#else 
+	#else
 		if(stdio_ensure_shmem_buf(f) < 0) return 0;
 
 		struct ringleader* rl = get_ringleader();
@@ -36,7 +35,7 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 		//copy past where the iovecs live
 		memcpy(&iovs[2], (void *) buf, len);
 	#endif
-	
+
 	struct iovec *iov = iovs;
 	size_t rem = iov[0].iov_len + iov[1].iov_len;
 	int iovcnt = 2;
@@ -63,9 +62,9 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
                 certikos_puts("Did not get expected ringleader write completion token");
 				cnt = 0;
 			}
-			
+
 		#endif
-		
+
 		if (cnt == rem) {
 			f->wend = f->buf + f->buf_size;
 			f->wpos = f->wbase = f->buf;

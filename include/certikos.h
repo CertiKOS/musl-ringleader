@@ -24,5 +24,7 @@ int certikos_printf(const char *restrict fmt, ...);
 
 int musl_ringleader_ioctl(int fd, int req, void* arg);
 int musl_ringleader_getdents(int fd, struct dirent *buf, unsigned int len);
+int musl_ringleader_fcntl(int fd, int cmd, long arg);
+int musl_ringleader_openat(int fd, const char *filename, int flags, mode_t mode);
 
 #endif /* _CERTIKOS_H_ */

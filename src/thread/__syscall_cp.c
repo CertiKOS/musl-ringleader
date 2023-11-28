@@ -16,5 +16,9 @@ long (__syscall_cp)(syscall_arg_t nr,
                     syscall_arg_t u, syscall_arg_t v, syscall_arg_t w,
                     syscall_arg_t x, syscall_arg_t y, syscall_arg_t z)
 {
+#ifndef _CERTIKOS_
 	return __syscall_cp_c(nr, u, v, w, x, y, z);
+#else
+	return syscall(nr, u, v, w, x, y, z);
+#endif
 }
