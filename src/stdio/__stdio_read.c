@@ -4,7 +4,8 @@
 
 #ifdef _CERTIKOS_
 #include "certikos_impl.h"
-#include "ringleader.h"
+#include <certikos.h>
+#include <ringleader.h>
 #endif
 
 size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
@@ -63,8 +64,9 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
 			memcpy(f->buf, (char *)(iov + 2) + (len - !!f->buf_size), cnt);
 		}
     } else {
+        uint64_t cookie = cqe->user_data;
         ringleader_consume_cqe(rl, cqe);
-        certikos_puts("Did not get expected ringleader read completion token");
+        certikos_printf("Did not get expected ringleader read completion token: %llu\n", cookie);
         cnt = 0;
     }
 	#endif

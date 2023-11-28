@@ -115,6 +115,7 @@ static inline long __syscall3(long n, long a, long b, long c)
 		case SYS_getdents64: return musl_ringleader_getdents(a, (void*)b, c);
 		case SYS_fcntl: return musl_ringleader_fcntl(a, b, c);
 		case SYS_openat: return musl_ringleader_openat(a, (void*)b, c, 0);
+		case SYS_lseek: return musl_ringleader_lseek(a, b, c);
 		default: break;
 	}
 

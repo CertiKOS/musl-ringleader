@@ -26,6 +26,7 @@
 #define LISTEN_COOKIE       (3424060)
 #define READ_COOKIE         (3705175)
 #define IOCTL_COOKIE        (123897897)
+#define LSEEK_COOKIE        (1234010010)
 #define GETDENTS_COOKIE     (1238000297)
 
 
@@ -33,6 +34,7 @@ struct ringleader* get_ringleader(void);
 int ringleader_allocated(void);
 void *get_rl_shmem_singleton(void);
 void *alloc_new_rl_shmem(int size);
+
 
 
 #endif

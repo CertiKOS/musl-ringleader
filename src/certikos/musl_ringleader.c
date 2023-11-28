@@ -72,7 +72,8 @@ create_rl_shmem(struct ringleader* rl, int size)
     }
     else
     {
-        certikos_puts("Did not get expected ringleader completion token");
+        ringleader_consume_cqe(rl, cqe);
+        certikos_puts("Did not get expected ringleader completion token\n");
         exit(-1);
     }
     return NULL;

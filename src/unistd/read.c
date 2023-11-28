@@ -2,11 +2,11 @@
 #include "syscall.h"
 
 #ifdef _CERTIKOS_
-#include "certikos_impl.h"
-#include "ringleader.h"
-
 #include <string.h>
 #include <stdio.h>
+#include <ringleader.h>
+#include <certikos.h>
+#include "certikos_impl.h"
 #endif
 
 static inline int min(const int a, const int b) {
@@ -37,8 +37,9 @@ ssize_t read(int fd, void *buf, size_t count)
 		}
 		return __syscall_ret(ret);
 	} else {
+        uint64_t cookie = cqe->user_data;
 		ringleader_consume_cqe(rl, cqe);
-		certikos_puts("Did not get expected ringleader read completion token");
+		certikos_printf("read: unexpected cookie %llu", cookie);
 		return __syscall_ret(-EIO);
 	}
 	#endif
