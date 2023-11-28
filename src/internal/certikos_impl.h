@@ -10,6 +10,7 @@
 
 #define SOCKET_COOKIE       (2841)
 #define READV_COOKIE        (3142)
+#define MKDIRAT_COOKIE      (5181)
 #define CONNECT_COOKIE      (48821)
 #define CLOSE_COOKIE        (132413)
 #define OPENAT_COOKIE       (350652)
@@ -20,6 +21,7 @@
 #define WRITE_COOKIE        (2020860)
 #define STATX_COOKIE        (2150650)
 #define ADVISE_COOKIE       (2241254)
+#define FSYNC_COOKIE        (2324231)
 #define SEND_COOKIE         (2445150)
 #define RECV_COOKIE         (2740787)
 #define ACCEPT_COOKIE       (3129646)

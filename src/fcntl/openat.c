@@ -4,7 +4,8 @@
 
 #ifdef _CERTIKOS_
 #include "certikos_impl.h"
-#include "ringleader.h"
+#include <ringleader.h>
+#include <certikos.h>
 #include <string.h>
 
 int musl_ringleader_openat(int fd, const char *filename, int flags, mode_t mode)
