@@ -37,6 +37,7 @@ int ringleader_allocated(void);
 void *get_rl_shmem_singleton(void);
 void *alloc_new_rl_shmem(int size);
 
+struct ringleader_arena * musl_ringleader_get_arena(struct ringleader * rl, size_t size);
 
 
 #endif

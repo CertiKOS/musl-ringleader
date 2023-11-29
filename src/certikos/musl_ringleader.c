@@ -1,9 +1,10 @@
-#include "certikos_impl.h"
 #include <ringleader.h>
 #include <certikos.h>
-#include "syscall.h"
 #include <stdatomic.h>
 #include <limits.h>
+#include "libc.h"
+#include "certikos_impl.h"
+#include "syscall.h"
 
 #define MIN_ENTRIES 16
 
@@ -56,7 +57,8 @@ create_rl_shmem(struct ringleader* rl, int size)
 
 
     struct io_uring_cqe* cqe = ringleader_get_cqe(rl);
-    if ((uint64_t)(cqe->user_data & shmem_cookie_mask) == (shmem_cookie & shmem_cookie_mask))
+    if ((uint64_t)(cqe->user_data & shmem_cookie_mask) ==
+            (shmem_cookie & shmem_cookie_mask))
     {
         if (ringleader_add_shmem(rl, cqe, size, &ret) == ERR_OK)
         {
@@ -106,4 +108,49 @@ alloc_new_rl_shmem(int size)
     struct ringleader* rl    = get_ringleader();
     return create_rl_shmem(rl, size);
 }
+
+
+struct ringleader_arena *
+musl_ringleader_get_arena(struct ringleader *rl, size_t size)
+{
+    struct io_uring_cqe* cqe;
+    struct ringleader_arena * ret = NULL;
+
+    shmem_cookie += 1;
+    if(ringleader_request_arena(rl, size, (void*)shmem_cookie) != ERR_OK)
+    {
+        fprintf(stdenclave, "Failed to request arena.\n");
+        return NULL;
+    }
+
+    while(1)
+    {
+        cqe = ringleader_get_cqe(rl);
+        if(!cqe)
+        {
+            fprintf(stdenclave, "Failed to get cqe.\n");
+            return NULL;
+        }
+
+        if((uint64_t)(cqe->user_data & shmem_cookie_mask) ==
+                (shmem_cookie & shmem_cookie_mask))
+        {
+            break;
+        }
+
+        fprintf(stdenclave, "get_rl_arena: unexpected cookie\n");
+        ringleader_consume_cqe(rl, cqe);
+    }
+
+
+    if (ringleader_init_arena(rl, cqe, &ret) != ERR_OK)
+    {
+        fprintf(stdenclave, "Failed to alloc shmem.\n");
+    }
+
+    ringleader_consume_cqe(rl, cqe);
+    return ret;
+}
+
+
 

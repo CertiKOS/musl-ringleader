@@ -19,10 +19,15 @@ ssize_t read(int fd, void *buf, size_t count)
 	return syscall_cp(SYS_read, fd, buf, count);
 	#else
 	struct ringleader *rl = get_ringleader();
-    //TODO how tight can this bound be
-	void *shmem = (count <= SHMEM_SIZE) ? get_rl_shmem_singleton() :
-		alloc_new_rl_shmem(count + 0x100);
-	if(shmem == NULL) return __syscall_ret(-ENOMEM);
+
+	struct ringleader_arena *arena =
+		musl_ringleader_get_arena(rl, count + 0x100);
+	if(!arena)
+		return __syscall_ret(-ENOMEM);
+
+	void *shmem = ringleader_arena_push(arena, count);
+	if(!shmem)
+		return __syscall_ret(-ENOMEM);
 
 	int32_t id = ringleader_prep_read(rl, fd, shmem, count, -1);
 	ringleader_set_user_data(rl, id, (void *) READ_COOKIE);
@@ -33,12 +38,14 @@ ssize_t read(int fd, void *buf, size_t count)
 		__s32 ret = cqe->res;
 		ringleader_consume_cqe(rl, cqe);
 		if(ret > 0){
-			memcpy(buf, shmem, ret);
+			ringleader_arena_apop(arena, shmem, buf);
 		}
+		ringleader_free_arena(rl, arena);
 		return __syscall_ret(ret);
 	} else {
-        uint64_t cookie = cqe->user_data;
+		uint64_t cookie = cqe->user_data;
 		ringleader_consume_cqe(rl, cqe);
+		ringleader_free_arena(rl, arena);
 		certikos_printf("read: unexpected cookie %llu", cookie);
 		return __syscall_ret(-EIO);
 	}
