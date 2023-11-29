@@ -62,6 +62,9 @@ typedef union _G_fpos64_t {
 extern FILE *const stdin;
 extern FILE *const stdout;
 extern FILE *const stderr;
+#ifdef _CERTIKOS_
+extern FILE *const stdenclave;
+#endif
 
 #define stdin  (stdin)
 #define stdout (stdout)
