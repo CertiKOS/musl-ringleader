@@ -437,12 +437,12 @@
 #define __NR_tgkill                  1130
 #define __NR_sigaltstack             1131
 #define __NR_rt_sigsuspend           1132
-#define __NR_rt_sigaction            1133
+#define __NR_rt_sigaction            52
 #define __NR_rt_sigprocmask          53
 #define __NR_rt_sigpending           1135
 #define __NR_rt_sigtimedwait         1136
 #define __NR_rt_sigqueueinfo         1137
-#define __NR_rt_sigreturn            1138
+#define __NR_rt_sigreturn            54
 #define __NR_setpriority             1139
 #define __NR_getpriority             1140
 #define __NR_reboot                  1141
