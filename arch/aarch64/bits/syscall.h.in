@@ -406,7 +406,7 @@
 #define __NR_get_robust_list         1099
 #define __NR_nanosleep               1100
 #define __NR_getitimer               1101
-#define __NR_setitimer               1102
+#define __NR_setitimer               55
 #define __NR_kexec_load              1103
 #define __NR_init_module             1104
 #define __NR_delete_module           1105

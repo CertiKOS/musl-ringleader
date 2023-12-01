@@ -26,9 +26,9 @@ int musl_ringleader_ioctl(int fd, int req, void* arg)
 		case TIOCSWINSZ:
 			arg_size = sizeof(struct winsize);
 			break;
-        case FIONREAD:
-            arg_size = sizeof(int);
-            break;
+		case FIONREAD:
+			arg_size = sizeof(int);
+			break;
 		default:
 			certikos_printf("unknown ioctl req: 0x%x arg=%lx\n",
 					req, arg);
@@ -192,12 +192,7 @@ int ioctl(int fd, int req, ...)
 	va_start(ap, req);
 	arg = va_arg(ap, void *);
 	va_end(ap);
-#ifndef _CERTIKOS_
 	int r = __syscall(SYS_ioctl, fd, req, arg);
-#else
-	int r = musl_ringleader_ioctl(fd, req, arg);
-	//TODO compat below
-#endif
 	if (SIOCGSTAMP != SIOCGSTAMP_OLD && req && r==-ENOTTY) {
 		for (int i=0; i<sizeof compat_map/sizeof *compat_map; i++) {
 			if (compat_map[i].new_req != req) continue;
