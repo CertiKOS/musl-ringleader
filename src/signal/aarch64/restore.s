@@ -7,5 +7,5 @@ __restore:
 .type __restore_rt,%function
 __restore_rt:
 // _CERTIKOS_
-	mov x8,#54 // SYS_rt_sigreturn
+	mov x0,#54 // SYS_rt_sigreturn
 	svc 0
