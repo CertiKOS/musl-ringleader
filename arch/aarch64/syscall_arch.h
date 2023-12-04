@@ -110,6 +110,15 @@ static inline long __syscall1(long n, long a)
 
 static inline long __syscall2(long n, long a, long b)
 {
+#ifdef _CERTIKOS_
+	/* MUSL RINGLEADER OVERRIDES */
+	switch(n)
+	{
+		case SYS_pipe2: return musl_ringleader_pipe2((void*)a, b);
+		default: break;
+	}
+#endif
+
 	register long x0 __asm__("x0") = n;
 	register long x1 __asm__("x1") = a;
 	register long x2 __asm__("x2") = b;

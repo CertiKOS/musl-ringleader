@@ -51,32 +51,29 @@ create_rl_shmem(struct ringleader* rl, int size)
 
     if (ringleader_request_shmem(rl, size, (void*)shmem_cookie) != ERR_OK)
     {
-        certikos_puts("Failed to request shmem\n");
+        fprintf(stdenclave, "Failed to request shmem\n");
         return NULL;
     }
 
-
     struct io_uring_cqe* cqe = ringleader_get_cqe(rl);
-    if ((uint64_t)(cqe->user_data & shmem_cookie_mask) ==
+    while((uint64_t)(cqe->user_data & shmem_cookie_mask) !=
             (shmem_cookie & shmem_cookie_mask))
     {
-        if (ringleader_add_shmem(rl, cqe, size, &ret) == ERR_OK)
-        {
-            ringleader_consume_cqe(rl, cqe);
-            return ret;
-        }
-        else
-        {
-            certikos_puts("Failed to alloc shmem.\n");
-            ringleader_consume_cqe(rl, cqe);
-            return NULL;
-        }
+        fprintf(stdenclave, "Unexpected completion token %llu\n", cqe->user_data);
+        ringleader_consume_cqe(rl, cqe);
+        cqe = ringleader_get_cqe(rl);
+    }
+
+    if (ringleader_add_shmem(rl, cqe, size, &ret) == ERR_OK)
+    {
+        ringleader_consume_cqe(rl, cqe);
+        return ret;
     }
     else
     {
+        certikos_puts("Failed to alloc shmem.\n");
         ringleader_consume_cqe(rl, cqe);
-        certikos_puts("Did not get expected ringleader completion token\n");
-        exit(-1);
+        return NULL;
     }
     return NULL;
 }

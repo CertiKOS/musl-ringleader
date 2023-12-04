@@ -15,6 +15,7 @@
 #define CLOSE_COOKIE        (132413)
 #define OPENAT_COOKIE       (350652)
 #define OPEN_COOKIE         (350653)
+#define PIPE2_COOKIE        (405003)
 #define UNLINK_COOKIE       (1607102)
 #define FCNTL_COOKIE        (1644911)
 #define BIND_COOKIE         (1927814)
