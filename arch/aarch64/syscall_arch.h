@@ -180,6 +180,15 @@ static inline long __syscall5(long n, long a, long b, long c, long d, long e)
 
 static inline long __syscall6(long n, long a, long b, long c, long d, long e, long f)
 {
+#ifdef _CERTIKOS_
+	/* MUSL RINGLEADER OVERRIDES */
+	switch(n)
+	{
+		case SYS_shutdown: return musl_ringleader_shutdown(a, b);
+		default: break;
+	}
+#endif
+
 	register long x0 __asm__("x0") = n;
 	register long x1 __asm__("x1") = a;
 	register long x2 __asm__("x2") = b;

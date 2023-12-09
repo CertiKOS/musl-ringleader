@@ -31,5 +31,6 @@ int musl_ringleader_fsync(int fd);
 int musl_ringleader_fdatasync(int fd);
 int musl_ringleader_mkdirat(int fd, const char *filename, mode_t mode);
 int musl_ringleader_pipe2(int fd[2], int flags);
+int musl_ringleader_shutdown(int fd, int how);
 
 #endif /* _CERTIKOS_H_ */

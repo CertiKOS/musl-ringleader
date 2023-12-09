@@ -13,6 +13,7 @@
 #define MKDIRAT_COOKIE      (5181)
 #define CONNECT_COOKIE      (48821)
 #define CLOSE_COOKIE        (132413)
+#define SHUTDOWN_COOKIE     (179432)
 #define OPENAT_COOKIE       (350652)
 #define OPEN_COOKIE         (350653)
 #define PIPE2_COOKIE        (405003)
