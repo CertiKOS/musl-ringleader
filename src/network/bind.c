@@ -22,8 +22,6 @@ int bind(int fd, const struct sockaddr *addr, socklen_t len)
 	ringleader_set_user_data(rl, id, (void *) BIND_COOKIE);
 	ringleader_submit(rl);
 
-	syscall(SYS_sched_yield);
-
 	struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
     if (cqe->user_data == BIND_COOKIE)
     {

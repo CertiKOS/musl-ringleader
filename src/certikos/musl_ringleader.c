@@ -23,6 +23,12 @@ get_ringleader(void)
         return static_rl;
     }
     static_rl = ringleader_factory(MIN_ENTRIES);
+    if(!static_rl)
+    {
+        certikos_printf("Fatal: failed to allocate static RingLeader\n");
+        return NULL;
+    }
+
     err_t err;
     while ((err = ringleader_init_finished(static_rl)) == ERR_NOT_READY)
     {

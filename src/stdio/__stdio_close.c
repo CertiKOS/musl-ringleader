@@ -23,8 +23,7 @@ int __stdio_close(FILE *f)
 	int32_t id = ringleader_prep_close(rl, f->fd);
 	ringleader_set_user_data(rl, id, (void *)CLOSE_COOKIE);
 	ringleader_submit(rl);
-	syscall(SYS_sched_yield);
-	
+
 	struct io_uring_cqe* cqe = ringleader_get_cqe(rl);
 	int ret;
 	if((uint64_t) cqe->user_data == CLOSE_COOKIE){

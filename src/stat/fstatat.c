@@ -166,8 +166,6 @@ int __fstatat(int fd, const char *restrict path, struct stat *restrict st, int f
 		ringleader_set_user_data(rl, id, (void *) STATX_COOKIE);
 		ringleader_submit(rl);
 
-		syscall(SYS_sched_yield);
-
 		struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
 		if((uint64_t) cqe->user_data == STATX_COOKIE){
 			ret = cqe->res;

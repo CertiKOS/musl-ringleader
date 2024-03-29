@@ -50,7 +50,6 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 			int32_t id = ringleader_prep_writev(rl, f->fd, iov, iovcnt, -1);
 			ringleader_set_user_data(rl, id, (void *) WRITE_COOKIE);
 			ringleader_submit(rl);
-			syscall(SYS_sched_yield);
 
 			struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
 			if((uint64_t) cqe->user_data == WRITE_COOKIE){

@@ -15,8 +15,6 @@ int ringleader_socket_helper(int domain, int type, int protocol){
     ringleader_set_user_data(rl, index, (void *) SOCKET_COOKIE);
     ringleader_submit(rl);
 
-    syscall(SYS_sched_yield);
-
     struct io_uring_cqe* cqe = ringleader_get_cqe(rl);
     if (cqe->user_data == SOCKET_COOKIE)
     {

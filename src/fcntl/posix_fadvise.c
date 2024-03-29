@@ -26,8 +26,6 @@ int posix_fadvise(int fd, off_t base, off_t len, int advice)
 	ringleader_set_user_data(rl, id, (void *) ADVISE_COOKIE);
 	ringleader_submit(rl);
 
-	syscall(SYS_sched_yield);
-
 	struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
 	if((uint64_t) cqe->user_data == ADVISE_COOKIE){
 		int ret = cqe->res;

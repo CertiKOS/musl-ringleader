@@ -21,8 +21,6 @@ int accept(int fd, struct sockaddr *restrict addr, socklen_t *restrict len)
     ringleader_set_user_data(rl, id, (void *)ACCEPT_COOKIE);
     ringleader_submit(rl);
 
-    syscall(SYS_sched_yield);
-
     struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
     if (cqe->user_data == ACCEPT_COOKIE)
     {

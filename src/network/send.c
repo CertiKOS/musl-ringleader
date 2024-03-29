@@ -21,8 +21,6 @@ ssize_t send(int fd, const void *buf, size_t len, int flags)
 	ringleader_set_user_data(rl, id, (void *)SEND_COOKIE);
 	ringleader_submit(rl);
 
-    syscall(SYS_sched_yield);
-
     struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
 	if(cqe->user_data == SEND_COOKIE){
 		int ret = cqe->res;

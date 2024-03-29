@@ -45,7 +45,6 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
         ringleader_set_user_data(rl, id, (void*)READ_COOKIE);
     }
     ringleader_submit(rl);
-    syscall(SYS_sched_yield);
 
     struct io_uring_cqe* cqe = ringleader_get_cqe(rl);
     if ((uint64_t)cqe->user_data == READV_COOKIE)

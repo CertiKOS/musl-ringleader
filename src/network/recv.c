@@ -19,8 +19,6 @@ ssize_t recv(int fd, void *buf, size_t len, int flags)
 	ringleader_set_user_data(rl, id, (void *)RECV_COOKIE);
 	ringleader_submit(rl);
 
-    syscall(SYS_sched_yield);
-
     struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
 	if(cqe->user_data == RECV_COOKIE){
 		if(cqe->res >= 0){
