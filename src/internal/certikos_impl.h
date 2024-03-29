@@ -19,6 +19,8 @@
 #define PIPE2_COOKIE        (405003)
 #define UNLINK_COOKIE       (1607102)
 #define FCNTL_COOKIE        (1644911)
+#define GETPPID_COOKIE      (1641100)
+#define GETPID_COOKIE       (1700000)
 #define BIND_COOKIE         (1927814)
 #define WRITE_COOKIE        (2020860)
 #define STATX_COOKIE        (2150650)

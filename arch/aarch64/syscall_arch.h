@@ -86,6 +86,16 @@ static inline long __syscall6(long n, long a, long b, long c, long d, long e, lo
 
 static inline long __syscall0(long n)
 {
+#ifdef _CERTIKOS_
+	/* MUSL RINGLEADER OVERRIDES */
+	switch(n)
+	{
+        //use certikos pid
+		//case SYS_getpid: return musl_ringleader_getpid();
+		case SYS_getppid: return musl_ringleader_getppid();
+		default: break;
+	}
+#endif
 	register long x0 __asm__("x0") = n;
 	register long x1 __asm__("x1");
 	__asm_syscall("r"(x0));

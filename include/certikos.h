@@ -32,5 +32,8 @@ int musl_ringleader_fdatasync(int fd);
 int musl_ringleader_mkdirat(int fd, const char *filename, mode_t mode);
 int musl_ringleader_pipe2(int fd[2], int flags);
 int musl_ringleader_shutdown(int fd, int how);
+pid_t musl_ringleader_getpid(); // use certikos pid
+pid_t musl_ringleader_getppid();
+
 
 #endif /* _CERTIKOS_H_ */
