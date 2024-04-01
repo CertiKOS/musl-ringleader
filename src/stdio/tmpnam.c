@@ -16,11 +16,17 @@ char *tmpnam(char *buf)
 	int r;
 	for (try=0; try<MAXTRIES; try++) {
 		__randname(s+12);
+#ifdef _CERTIKOS_
+        /* Until we have IO_URING_READLINK */
+        struct stat statbuf;
+        r = lstat(s, &statbuf);
+#else /* _CERTIKOS_ */
 #ifdef SYS_readlink
 		r = __syscall(SYS_readlink, s, (char[1]){0}, 1);
 #else
 		r = __syscall(SYS_readlinkat, AT_FDCWD, s, (char[1]){0}, 1);
 #endif
+#endif /* ! _CERTIKOS_ */
 		if (r == -ENOENT) return strcpy(buf ? buf : internal, s);
 	}
 	return 0;

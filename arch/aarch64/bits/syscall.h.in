@@ -416,7 +416,7 @@
 #define __NR_timer_settime           1109
 #define __NR_timer_delete            1110
 #define __NR_clock_settime           1111
-#define __NR_clock_gettime           1112
+#define __NR_clock_gettime           57
 #define __NR_clock_getres            1113
 #define __NR_clock_nanosleep         1114
 #define __NR_syslog                  1115

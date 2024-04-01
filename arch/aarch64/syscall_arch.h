@@ -147,6 +147,7 @@ static inline long __syscall3(long n, long a, long b, long c)
 		case SYS_openat: return musl_ringleader_openat(a, (void*)b, c, 0);
 		case SYS_lseek: return musl_ringleader_lseek(a, b, c);
 		case SYS_mkdirat: return musl_ringleader_mkdirat(a, (void*)b, c);
+		case SYS_unlinkat: return musl_ringleader_unlinkat(a, (void*)b, c);
 		default: break;
 	}
 #endif

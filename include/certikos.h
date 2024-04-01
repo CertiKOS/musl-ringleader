@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <ringleader.h>
 #include <dirent.h>
+#include <certikos/profile.h>
 
 /* Return the offset of 'member' relative to the beginning of a struct type */
 #define offsetof(type, member)  __builtin_offsetof(type, member)
@@ -34,6 +35,8 @@ int musl_ringleader_pipe2(int fd[2], int flags);
 int musl_ringleader_shutdown(int fd, int how);
 pid_t musl_ringleader_getpid(); // use certikos pid
 pid_t musl_ringleader_getppid();
+int musl_ringleader_unlinkat(int fd, const char *path, int flag);
 
+extern struct overheads_t musl_overheads;
 
 #endif /* _CERTIKOS_H_ */

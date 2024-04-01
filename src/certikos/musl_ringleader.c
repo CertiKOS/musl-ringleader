@@ -1,10 +1,13 @@
 #include <ringleader.h>
 #include <certikos.h>
+#include <certikos/profile.h>
 #include <stdatomic.h>
 #include <limits.h>
 #include "libc.h"
 #include "certikos_impl.h"
 #include "syscall.h"
+
+struct overheads_t musl_overheads;
 
 #define MIN_ENTRIES 16
 
@@ -13,15 +16,11 @@ uint64_t shmem_cookie_mask = 0xffffffff00000000;
 
 // NULL RETURNS INDICATE ERRORS
 
-static struct ringleader *static_rl = NULL;
+struct ringleader *static_rl = NULL;
 
-struct ringleader*
-get_ringleader(void)
+void
+musl_ringleader_init(void)
 {
-    if (static_rl != NULL)
-    {
-        return static_rl;
-    }
     static_rl = ringleader_factory(MIN_ENTRIES);
     if(!static_rl)
     {
@@ -40,11 +39,16 @@ get_ringleader(void)
         return NULL;
     }
 
-    return static_rl;
-}
+#ifdef MUSL_RINGLEADER_PROFILE
+    overheads_init(&musl_overheads);
+    overheads_track(&musl_overheads, track_ringleader_musl_base_overhead, prf_style_void);
+    overheads_track(&musl_overheads, track_ringleader_musl_unlinkat, prf_style_void);
+    overheads_track(&musl_overheads, track_ringleader_musl_openat, prf_style_void);
+    overheads_track(&musl_overheads, track_ringleader_musl_getppid, prf_style_void);
+    overheads_track(&musl_overheads, track_ringleader_musl_write, prf_style_void);
+    overheads_track(&musl_overheads, track_ringleader_musl_write_apush, prf_style_void);
+#endif
 
-int ringleader_allocated(void){
-    return static_rl != NULL;
 }
 
 // allocate a new block of memory
@@ -117,7 +121,13 @@ struct ringleader_arena *
 musl_ringleader_get_arena(struct ringleader *rl, size_t size)
 {
     struct io_uring_cqe* cqe;
-    struct ringleader_arena * ret = NULL;
+
+    /* fast path */
+    struct ringleader_arena * ret = ringleader_get_free_arena(rl, size);
+    if(ret)
+    {
+        return ret;
+    }
 
     shmem_cookie += 1;
     if(ringleader_request_arena(rl, size, (void*)shmem_cookie) != ERR_OK)

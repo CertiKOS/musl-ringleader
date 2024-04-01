@@ -6,6 +6,7 @@
 #include "certikos_impl.h"
 #include <ringleader.h>
 #include <certikos.h>
+#include <certikos/profile.h>
 #include <string.h>
 
 int musl_ringleader_openat(int fd, const char *filename, int flags, mode_t mode)
@@ -19,9 +20,20 @@ int musl_ringleader_openat(int fd, const char *filename, int flags, mode_t mode)
     strncpy(shmem, filename, SHMEM_SIZE - 0x100);
     id = ringleader_prep_openat(rl, fd, shmem, flags, mode);
     ringleader_set_user_data(rl, id, (void*)OPENAT_COOKIE);
+
+#ifdef MUSL_RINGLEADER_PROFILE
+	overhead_declare();
+	overheads_start(&musl_overheads, track_ringleader_musl_openat);
+#endif
+
     ringleader_submit(rl);
 
     struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
+
+#ifdef MUSL_RINGLEADER_PROFILE
+	overheads_end(&musl_overheads, track_ringleader_musl_openat);
+#endif
+
     if((uint64_t) cqe->user_data != OPENAT_COOKIE)
     {
         ringleader_consume_cqe(rl, cqe);

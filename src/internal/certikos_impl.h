@@ -36,12 +36,23 @@
 #define GETDENTS_COOKIE     (1238000297)
 
 
-struct ringleader* get_ringleader(void);
-int ringleader_allocated(void);
+void musl_ringleader_init(void);
 void *get_rl_shmem_singleton(void);
 void *alloc_new_rl_shmem(int size);
-
 struct ringleader_arena * musl_ringleader_get_arena(struct ringleader * rl, size_t size);
+
+static inline struct ringleader*
+get_ringleader(void)
+{
+    extern struct ringleader *static_rl;
+    if (static_rl == NULL)
+    {
+        musl_ringleader_init();
+    }
+
+    return static_rl;
+}
+
 
 
 #endif
