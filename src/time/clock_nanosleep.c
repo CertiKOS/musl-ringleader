@@ -7,6 +7,7 @@
 
 int __clock_nanosleep(clockid_t clk, int flags, const struct timespec *req, struct timespec *rem)
 {
+#ifndef _CERTIKOS_
 	if (clk == CLOCK_THREAD_CPUTIME_ID) return EINVAL;
 #ifdef SYS_clock_nanosleep_time64
 	time_t s = req->tv_sec;
@@ -33,6 +34,22 @@ int __clock_nanosleep(clockid_t clk, int flags, const struct timespec *req, stru
 		return -__syscall_cp(SYS_nanosleep, req, rem);
 	return -__syscall_cp(SYS_clock_nanosleep, clk, flags, req, rem);
 #endif
+#else /* _CERTIKOS_ */
+
+    struct timespec current;
+    struct timespec start;
+
+    clock_gettime(clk, &start);
+    current = start;
+
+    while(current.tv_sec - start.tv_sec < req->tv_sec &&
+            current.tv_nsec - start.tv_nsec < req->tv_nsec)
+    {
+        clock_gettime(clk, &current);
+    }
+
+    return 0;
+#endif /* _CERTIKOS_ */
 }
 
 weak_alias(__clock_nanosleep, clock_nanosleep);

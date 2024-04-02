@@ -28,6 +28,7 @@
 #define FSYNC_COOKIE        (2324231)
 #define SEND_COOKIE         (2445150)
 #define RECV_COOKIE         (2740787)
+#define SYNC_COOKIE         (2779211)
 #define ACCEPT_COOKIE       (3129646)
 #define LISTEN_COOKIE       (3424060)
 #define READ_COOKIE         (3705175)
