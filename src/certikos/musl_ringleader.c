@@ -14,9 +14,25 @@ struct overheads_t musl_overheads;
 uint64_t shmem_cookie =      0x7f7f7f7f00000000;
 uint64_t shmem_cookie_mask = 0xffffffff00000000;
 
-// NULL RETURNS INDICATE ERRORS
 
 struct ringleader *static_rl = NULL;
+
+err_t
+musl_ringleader_arena_callback(struct ringleader *rl, struct io_uring_cqe *cqe)
+{
+    struct ringleader_arena *arena;
+
+    if(ringleader_init_arena(rl, cqe, &arena) != ERR_OK)
+    {
+        certikos_printf("Failed to init arena\n");
+    } else {
+        ringleader_free_arena(rl, arena);
+    }
+
+    ringleader_consume_cqe(rl, cqe);
+    return ERR_OK_CONSUMED;
+}
+
 
 void
 musl_ringleader_init(void)
@@ -25,7 +41,7 @@ musl_ringleader_init(void)
     if(!static_rl)
     {
         certikos_printf("Fatal: failed to allocate static RingLeader\n");
-        return NULL;
+        return;
     }
 
     err_t err;
@@ -36,8 +52,34 @@ musl_ringleader_init(void)
     if (err != ERR_OK)
     {
         certikos_printf("Failed to start ringleader, error %d\n", err);
-        return NULL;
+        return;
     }
+
+    /* prerequest shmem for singleton, stdout, stdin, and stderr */
+    if(ringleader_request_arena_callback(static_rl, SHMEM_SIZE + 0x100,
+                musl_ringleader_arena_callback, NULL) != ERR_OK)
+    {
+        certikos_printf("Failed to request shmem\n");
+    }
+
+    if(ringleader_request_arena_callback(static_rl, BUFSIZ + UNGET + 0x100,
+                musl_ringleader_arena_callback, NULL) != ERR_OK)
+    {
+        certikos_printf("Failed to request shmem\n");
+    }
+
+    if(ringleader_request_arena_callback(static_rl, BUFSIZ + UNGET + 0x100,
+                musl_ringleader_arena_callback, NULL) != ERR_OK)
+    {
+        certikos_printf("Failed to request shmem\n");
+    }
+
+    if(ringleader_request_arena_callback(static_rl, BUFSIZ + UNGET + 0x100,
+                musl_ringleader_arena_callback, NULL) != ERR_OK)
+    {
+        certikos_printf("Failed to request shmem\n");
+    }
+
 
 #ifdef MUSL_RINGLEADER_PROFILE
     overheads_init(&musl_overheads);
@@ -51,76 +93,31 @@ musl_ringleader_init(void)
 
 }
 
-// allocate a new block of memory
-// goes at the last block
-void *
-create_rl_shmem(struct ringleader* rl, int size)
-{
-    void * ret;
-    shmem_cookie += 1;
 
-    if (ringleader_request_shmem(rl, size, (void*)shmem_cookie) != ERR_OK)
-    {
-        fprintf(stdenclave, "Failed to request shmem\n");
-        return NULL;
-    }
-
-    struct io_uring_cqe* cqe = ringleader_get_cqe(rl);
-    while((uint64_t)(cqe->user_data & shmem_cookie_mask) !=
-            (shmem_cookie & shmem_cookie_mask))
-    {
-        fprintf(stdenclave, "Unexpected completion token %llu\n", cqe->user_data);
-        ringleader_consume_cqe(rl, cqe);
-        cqe = ringleader_get_cqe(rl);
-    }
-
-    if (ringleader_add_shmem(rl, cqe, size, &ret) == ERR_OK)
-    {
-        ringleader_consume_cqe(rl, cqe);
-        return ret;
-    }
-    else
-    {
-        certikos_puts("Failed to alloc shmem.\n");
-        ringleader_consume_cqe(rl, cqe);
-        return NULL;
-    }
-    return NULL;
-}
-
-// always use first shmem for now, easier for deubgging, i.e. shmem singleton.
 void*
 get_rl_shmem_singleton(void)
 {
     static void* shmem = NULL;
+    static struct ringleader_arena * singleton_arena = NULL;
 
     if(!shmem)
     {
-        // TODO: modify this to be more dynamic and allow more than 4 pages of
-        // memory using shmem malloc when that is completed
-        struct ringleader* rl = get_ringleader();
-        shmem = create_rl_shmem(rl, SHMEM_SIZE);
-        if(!shmem)
-        {
-            certikos_puts("Failed to get singleton.\n");
-        }
+        struct ringleader * rl = get_ringleader();
+        singleton_arena = musl_ringleader_get_arena(rl, SHMEM_SIZE);
+        shmem = ringleader_arena_push(singleton_arena, SHMEM_SIZE);
     }
 
     return shmem;
 }
 
-void*
-alloc_new_rl_shmem(int size)
-{
-    struct ringleader* rl    = get_ringleader();
-    return create_rl_shmem(rl, size);
-}
 
 
 struct ringleader_arena *
 musl_ringleader_get_arena(struct ringleader *rl, size_t size)
 {
     struct io_uring_cqe* cqe;
+
+    size += 0x100;
 
     /* fast path */
     struct ringleader_arena * ret = ringleader_get_free_arena(rl, size);
@@ -166,4 +163,20 @@ musl_ringleader_get_arena(struct ringleader *rl, size_t size)
 }
 
 
+
+int musl_ringleader_wait_result(struct ringleader *rl, uintptr_t cookie)
+{
+    int ret;
+    struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
+
+    while((uintptr_t)cqe->user_data != cookie)
+    {
+        ringleader_consume_cqe(rl, cqe);
+        cqe = ringleader_get_cqe(rl);
+    }
+
+    ret = cqe->res;
+    ringleader_consume_cqe(rl, cqe);
+    return ret;
+}
 

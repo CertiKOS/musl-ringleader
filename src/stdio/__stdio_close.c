@@ -15,27 +15,28 @@ weak_alias(dummy, __aio_close);
 
 int __stdio_close(FILE *f)
 {
-	#ifndef _CERTIKOS_
+#ifndef _CERTIKOS_
 	return syscall(SYS_close, __aio_close(f->fd));
-	#else
+#else
 
     struct ringleader* rl = get_ringleader();
-	int32_t id = ringleader_prep_close(rl, f->fd);
-	ringleader_set_user_data(rl, id, (void *)CLOSE_COOKIE);
-	ringleader_submit(rl);
+    int32_t id = ringleader_prep_close(rl, f->fd);
+    ringleader_set_user_data(rl, id, (void *)CLOSE_COOKIE);
 
-	struct io_uring_cqe* cqe = ringleader_get_cqe(rl);
-	int ret;
-	if((uint64_t) cqe->user_data == CLOSE_COOKIE){
-		ret = cqe->res;
-		ringleader_consume_cqe(rl, cqe);
-		return ret;
-	} else {
+    ringleader_submit(rl);
+
+    struct io_uring_cqe* cqe = ringleader_get_cqe(rl);
+    int ret;
+    if((uint64_t) cqe->user_data == CLOSE_COOKIE){
+        ret = cqe->res;
+        ringleader_consume_cqe(rl, cqe);
+        return ret;
+    } else {
         ringleader_consume_cqe(rl, cqe);
         certikos_puts("Did not get expected ringleader close completion token");
         ret = -1;
     }
-	return ret;
+    return ret;
 #endif
 
 }

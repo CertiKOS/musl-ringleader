@@ -37,6 +37,9 @@ pid_t musl_ringleader_getpid(); // use certikos pid
 pid_t musl_ringleader_getppid();
 int musl_ringleader_unlinkat(int fd, const char *path, int flag);
 void musl_ringleader_sync();
+ssize_t musl_ringleader_read(int fd, void *buf, size_t count);
+ssize_t musl_ringleader_write(int fd, const void *buf, size_t count);
+
 
 extern struct overheads_t musl_overheads;
 

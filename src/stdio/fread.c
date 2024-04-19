@@ -1,5 +1,8 @@
 #include "stdio_impl.h"
 #include <string.h>
+#ifdef _CERTIKOS_
+#include "certikos_impl.h"
+#endif
 
 #define MIN(a,b) ((a)<(b) ? (a) : (b))
 
@@ -8,6 +11,15 @@ size_t fread(void *restrict destv, size_t size, size_t nmemb, FILE *restrict f)
 	unsigned char *dest = destv;
 	size_t len = size*nmemb, l = len, k;
 	if (!size) nmemb = 0;
+
+#ifdef _CERTIKOS_
+    struct ringleader *rl = get_ringleader();
+    while(f->rl.pending_buf_read)
+    {
+        struct io_uring_cqe * cqe = ringleader_peek_cqe(rl);
+        (void)cqe;
+    }
+#endif
 
 	FLOCK(f);
 
@@ -21,7 +33,7 @@ size_t fread(void *restrict destv, size_t size, size_t nmemb, FILE *restrict f)
 		dest += k;
 		l -= k;
 	}
-	
+
 	/* Read the remainder directly */
 	for (; l; l-=k, dest+=k) {
 		k = __toread(f) ? 0 : f->read(f, dest, l);

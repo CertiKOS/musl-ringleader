@@ -12,11 +12,11 @@
 int musl_ringleader_getdents(int fd, struct dirent *buf, unsigned int len)
 {
 	struct ringleader *rl = get_ringleader();
-	void *shmem = (len <= SHMEM_SIZE) ? get_rl_shmem_singleton() :
-		alloc_new_rl_shmem(len);
-	if(shmem == NULL) return -ENOMEM;
+	struct ringleader_arena * arena = musl_ringleader_get_arena(rl, len);
+	if(arena == NULL) return -ENOMEM;
 
-	memcpy(shmem, buf, len);
+	void *shmem  = ringleader_arena_apush(arena, buf, len);
+
 
 	uint32_t id = ringleader_prep_getdents(rl, fd, shmem, len);
 	ringleader_set_user_data(rl, id, (void *) GETDENTS_COOKIE);
@@ -36,6 +36,7 @@ int musl_ringleader_getdents(int fd, struct dirent *buf, unsigned int len)
 		certikos_puts("Unxpected ringleader getdents cookie\n");
 	}
 
+	ringleader_free_arena(rl, arena);
 	ringleader_consume_cqe(rl, cqe);
 	return ret;
 }

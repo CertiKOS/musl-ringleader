@@ -6,6 +6,9 @@
 #include "syscall.h"
 #include "atomic.h"
 #include "libc.h"
+#ifdef _CERTIKOS_
+#include "certikos_impl.h"
+#endif
 
 static void dummy(void) {}
 weak_alias(dummy, _init);
@@ -90,6 +93,10 @@ static int libc_start_main_stage2(int (*main)(int,char **,char **), int argc, ch
 {
 	char **envp = argv+argc+1;
 	__libc_start_init();
+
+#ifdef _CERTIKOS_
+	musl_ringleader_init();
+#endif
 
 	/* Pass control to the application */
 	exit(main(argc, argv, envp));

@@ -31,11 +31,10 @@ FILE *fopen(const char *restrict filename, const char *restrict mode)
 	f = __fdopen(fd, mode);
 	if (f) return f;
 
-	certikos_puts("Not valid");
-
 	#ifndef _CERTIKOS_
 		__syscall(SYS_close, fd);
 	#else
+		certikos_puts("Not valid");
 		//TODO add in close
 	#endif
 

@@ -1,4 +1,7 @@
 #include "stdio_impl.h"
+#ifdef _CERTIKOS_
+#include "certikos_impl.h"
+#endif
 
 /* stdout.c will override this if linked */
 static FILE *volatile dummy = 0;
@@ -10,8 +13,6 @@ int fflush(FILE *f)
 	if (!f) {
 		int r = 0;
 
-		//I think these are somehow causing an infinity loop, like its defined as zero and then flushing to itself???
-		//TODO: MAYBE NOT: I'M CONFUSED
 		if (__stdout_used) r |= fflush(__stdout_used);
 		if (__stderr_used) r |= fflush(__stderr_used);
 
@@ -36,11 +37,21 @@ int fflush(FILE *f)
 		}
 	}
 
-	/* If reading, sync position, per POSIX */
-	//TODO: Fix seeking to be POSIX compliant
-	#ifndef _CERTIKOS_
+    /* If reading, sync position, per POSIX */
+#ifndef _CERTIKOS_
 	if (f->rpos != f->rend) f->seek(f, f->rpos-f->rend, SEEK_CUR);
-	#endif
+#else
+    //TODO: Fix seeking to be POSIX compliant
+
+    /* wait for outstanding write to complete */
+    struct ringleader *rl = get_ringleader();
+    while(f->rl.in_flight_arenas[0] || f->rl.in_flight_arenas[1])
+    {
+        struct io_uring_cqe * cqe = ringleader_peek_cqe(rl);
+        (void)cqe;
+    }
+#endif
+
 
 	/* Clear read and write modes */
 	f->wpos = f->wbase = f->wend = 0;

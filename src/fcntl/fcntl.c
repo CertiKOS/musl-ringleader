@@ -47,12 +47,14 @@ int musl_ringleader_fcntl(int fd, int cmd, long arg)
             break;
     }
 
+    struct ringleader_arena * arena = NULL;
+
     if(cp_in_sz || cp_out_sz)
     {
         size_t count = cp_in_sz > cp_out_sz ? cp_in_sz : cp_out_sz;
 
-        void *shmem = (count <= SHMEM_SIZE) ? get_rl_shmem_singleton() :
-            alloc_new_rl_shmem(count + 0x100);
+        arena = musl_ringleader_get_arena(rl, count);
+        void *shmem = ringleader_arena_push(arena, count);
         if(shmem == NULL)
         {
             return __syscall_ret(-ENOMEM);
@@ -78,6 +80,7 @@ int musl_ringleader_fcntl(int fd, int cmd, long arg)
     if((uint64_t) cqe->user_data != FCNTL_COOKIE)
     {
         ringleader_consume_cqe(rl, cqe);
+        ringleader_free_arena(rl, arena);
         certikos_puts("Did not get expected ringleader fcntl completion token");
         return -EINVAL;
     }
@@ -90,6 +93,7 @@ int musl_ringleader_fcntl(int fd, int cmd, long arg)
         memcpy((void*)arg, shmem, cp_out_sz);
     }
 
+    ringleader_free_arena(rl, arena);
     return ret;
 }
 

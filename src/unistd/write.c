@@ -5,14 +5,9 @@
 #include "certikos_impl.h"
 #include "ringleader.h"
 #include <string.h>
-#endif
 
-ssize_t write(int fd, const void *buf, size_t count)
+ssize_t musl_ringleader_write(int fd, const void *buf, size_t count)
 {
-#ifndef _CERTIKOS_
-	return syscall_cp(SYS_write, fd, buf, count);
-#else
-
 #ifdef MUSL_RINGLEADER_PROFILE
 	overhead_declare();
 	overheads_start(&musl_overheads, track_ringleader_musl_write_apush);
@@ -21,7 +16,7 @@ ssize_t write(int fd, const void *buf, size_t count)
 	struct ringleader *rl = get_ringleader();
 
 	struct ringleader_arena *arena =
-		musl_ringleader_get_arena(rl, count + 0x100);
+		musl_ringleader_get_arena(rl, count);
 	if(!arena)
 		return __syscall_ret(-ENOMEM);
 
@@ -62,5 +57,11 @@ ssize_t write(int fd, const void *buf, size_t count)
 #endif
 
 	return __syscall_ret(ret);
+}
+
 #endif
+
+ssize_t write(int fd, const void *buf, size_t count)
+{
+	return syscall_cp(SYS_write, fd, buf, count);
 }

@@ -143,7 +143,7 @@ static void out(FILE *f, const char *s, size_t l)
             if (!ferror(f))
                 __fwritex((void*)s, l, f);
         }
-	#else 
+	#else
 		if (!ferror(f)) __fwritex((void *)s, l, f);
 	#endif
 }
@@ -354,7 +354,7 @@ static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t)
 		if (z>d+1) z=d+1;
 	}
 	for (; z>a && !z[-1]; z--);
-	
+
 	if ((t|32)=='g') {
 		if (!p) p++;
 		if (p>e && e>=-4) {
@@ -689,9 +689,6 @@ int vfprintf(FILE *restrict f, const char *restrict fmt, va_list ap)
 	}
 
 	FLOCK(f);
-	#ifdef _CERTIKOS_
-	if(stdio_ensure_shmem_buf(f) < 0) return 0;
-	#endif
 
 	olderr = f->flags & F_ERR;
 	f->flags &= ~F_ERR;

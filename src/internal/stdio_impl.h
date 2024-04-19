@@ -19,7 +19,7 @@
 #define F_APP 128
 
 //TODO: I don't know if this is a) a safe way to add the flag if stdio is compiled elsewhere, and b) if I should put this flag somewhere else
-#ifdef _CERTIKOS_ 
+#ifdef _CERTIKOS_
 	#define F_ENCLAVE_TERMINAL 256
 #endif
 
@@ -50,6 +50,16 @@ struct _IO_FILE {
 	off_t shlim, shcnt;
 	FILE *prev_locked, *next_locked;
 	struct __locale_struct *locale;
+#ifdef _CERTIKOS_
+    struct {
+        struct ringleader_arena *buf_arena;
+        struct ringleader_arena *in_flight_arenas[2];
+        struct iovec in_flight_iovs[2];
+        struct iovec * iov_shmem;
+
+        int pending_buf_read;
+    } rl;
+#endif
 };
 
 extern hidden FILE *volatile __stdin_used;
@@ -121,9 +131,5 @@ hidden void __getopt_msg(const char *, const char *, const char *, size_t);
 hidden FILE *__fopen_rb_ca(const char *, FILE *, unsigned char *, size_t);
 hidden int __fclose_ca(FILE *);
 
-//function to allocate shmem buffers for stdin/stdout
-#ifdef _CERTIKOS_
-int stdio_ensure_shmem_buf(FILE *);
-#endif
 
 #endif

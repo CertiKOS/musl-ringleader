@@ -22,7 +22,6 @@ FILE *__fdopen(int fd, const char *mode)
 	}
 
 	/* Allocate FILE+buffer or fail */
-	//TODO I am worried that there may be some assumptions somehwere that it is contiguous
 	#ifndef _CERTIKOS_
 	if (!(f=malloc(sizeof *f + UNGET + BUFSIZ))) return 0;
 	#else
@@ -51,7 +50,9 @@ FILE *__fdopen(int fd, const char *mode)
 	#ifndef _CERTIKOS_
 	f->buf = (unsigned char *)f + sizeof *f + UNGET;
 	#else
-	unsigned char *buf = alloc_new_rl_shmem(BUFSIZ + UNGET);
+    struct ringleader *rl = get_ringleader();
+    f->rl.buf_arena = musl_ringleader_get_arena(rl, BUFSIZ + UNGET);
+	unsigned char *buf = ringleader_arena_push(f->rl.buf_arena, BUFSIZ + UNGET);
 	if(buf == NULL){
 		free(f);
 		return 0;
@@ -62,18 +63,15 @@ FILE *__fdopen(int fd, const char *mode)
 	f->buf_size = BUFSIZ;
 
 	/* Activate line buffered mode for terminals */
-	#ifndef _CERTIKOS_
 	f->lbf = EOF;
 	if (!(f->flags & F_NOWR) && !__syscall(SYS_ioctl, fd, TIOCGWINSZ, &wsz))
-		f->lbf = '\n'; 
-	#endif
+		f->lbf = '\n';
 
 	/* Initialize op ptrs. No problem if some are unneeded. */
-	//TODO free shmem
 	f->read = __stdio_read;
 	f->write = __stdio_write;
 	f->seek = __stdio_seek;
-    f->close = __stdio_close;
+	f->close = __stdio_close;
 
 	if (!libc.threaded) f->lock = -1;
 

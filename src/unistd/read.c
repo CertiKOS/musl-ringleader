@@ -7,21 +7,13 @@
 #include <ringleader.h>
 #include <certikos.h>
 #include "certikos_impl.h"
-#endif
 
-static inline int min(const int a, const int b) {
-    return a < b ? a : b;
-}
-
-ssize_t read(int fd, void *buf, size_t count)
+ssize_t musl_ringleader_read(int fd, void *buf, size_t count)
 {
-	#ifndef _CERTIKOS_
-	return syscall_cp(SYS_read, fd, buf, count);
-	#else
 	struct ringleader *rl = get_ringleader();
 
 	struct ringleader_arena *arena =
-		musl_ringleader_get_arena(rl, count + 0x100);
+		musl_ringleader_get_arena(rl, count);
 	if(!arena)
 		return __syscall_ret(-ENOMEM);
 
@@ -49,5 +41,12 @@ ssize_t read(int fd, void *buf, size_t count)
 		certikos_printf("read: unexpected cookie %llu", cookie);
 		return __syscall_ret(-EIO);
 	}
-	#endif
+}
+
+
+#endif
+
+ssize_t read(int fd, void *buf, size_t count)
+{
+	return syscall_cp(SYS_read, fd, buf, count);
 }
