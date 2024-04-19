@@ -108,12 +108,16 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 
     if(!f->rl.buf_arena)
     {
-        /* stdout/stderr first write */
         f->rl.buf_arena = musl_ringleader_get_arena(rl, BUFSIZ + UNGET);
         ringleader_arena_push(f->rl.buf_arena, UNGET);
+    }
+
+    if(!ringleader_arena_contains(f->rl.buf_arena, f->buf))
+    {
+        /* first stdout, and handling for all stderr prints */
         /* copy current buffer into new shmem buffer */
         intptr_t diff = (intptr_t)f->buf;
-        f->buf = ringleader_arena_apush(f->rl.buf_arena, f->buf, BUFSIZ);
+        f->buf = ringleader_arena_apush(f->rl.buf_arena, f->buf, f->buf_size);
         diff = (intptr_t)f->buf - diff;
         f->wpos += diff;
         f->wbase += diff;
