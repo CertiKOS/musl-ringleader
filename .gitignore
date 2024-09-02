@@ -9,6 +9,7 @@ lib/musl-gcc.specs
 
 ringleader
 include/certikos
+src/certikos-export
 *.swp
 *.swo
 
