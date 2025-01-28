@@ -56,6 +56,7 @@ struct _IO_FILE {
         struct ringleader_arena *in_flight_arenas[2];
         struct iovec in_flight_iovs[2];
         struct iovec * iov_shmem;
+        int err_res;
 
         int pending_buf_read;
     } rl;
@@ -117,10 +118,12 @@ hidden void __getopt_msg(const char *, const char *, const char *, size_t);
 
 #ifdef _CERTIKOS_
 	#define fenclave(f) ((f) -> flags & F_ENCLAVE_TERMINAL)
+void rl_stdio_wait_pending_read(FILE *f);
 #endif
 
 #define getc_unlocked(f) \
-	( ((f)->rpos != (f)->rend) ? *(f)->rpos++ : __uflow((f)) )
+	((rl_stdio_wait_pending_read((f))), \
+		(((f)->rpos != (f)->rend) ? *(f)->rpos++ : __uflow((f))))
 
 #define putc_unlocked(c, f) \
 	( (((unsigned char)(c)!=(f)->lbf && (f)->wpos!=(f)->wend)) \

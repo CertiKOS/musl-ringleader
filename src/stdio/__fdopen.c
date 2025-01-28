@@ -58,6 +58,7 @@ FILE *__fdopen(int fd, const char *mode)
 		return 0;
 	}
 	f->buf = buf + UNGET;
+	f->rl.pending_buf_read = 0;
 	#endif
 
 	f->buf_size = BUFSIZ;

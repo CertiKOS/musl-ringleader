@@ -37,20 +37,22 @@ int fflush(FILE *f)
 		}
 	}
 
-    /* If reading, sync position, per POSIX */
-#ifndef _CERTIKOS_
-	if (f->rpos != f->rend) f->seek(f, f->rpos-f->rend, SEEK_CUR);
-#else
-    //TODO: Fix seeking to be POSIX compliant
+#ifdef _CERTIKOS_
+    struct ringleader *rl = get_ringleader();
+
+    /* finish in-flight reads */
+    rl_stdio_wait_pending_read(f);
 
     /* wait for outstanding write to complete */
-    struct ringleader *rl = get_ringleader();
     while(f->rl.in_flight_arenas[0] || f->rl.in_flight_arenas[1])
     {
         struct io_uring_cqe * cqe = ringleader_peek_cqe(rl);
         (void)cqe;
     }
 #endif
+
+    /* If reading, sync position, per POSIX */
+	if (f->rpos != f->rend) f->seek(f, f->rpos-f->rend, SEEK_CUR);
 
 
 	/* Clear read and write modes */

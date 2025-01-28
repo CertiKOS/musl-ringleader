@@ -40,7 +40,7 @@ int musl_ringleader_pipe2(int fd[2], int flags)
     }
 
     ret = cqe->res;
-    ringleader_arena_apop(arena, shmem, fd);
+    ringleader_arena_apop(arena, shmem, fd, 2*sizeof(int));
     ringleader_free_arena(rl, arena);
     ringleader_consume_cqe(rl, cqe);
     return ret;

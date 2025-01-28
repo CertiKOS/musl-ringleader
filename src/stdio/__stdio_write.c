@@ -5,6 +5,7 @@
 #ifdef _CERTIKOS_
 #include "certikos_impl.h"
 #include "ringleader.h"
+#include <certikos/debug.h>
 
 
 
@@ -13,28 +14,39 @@ rl_stdio_write_done(struct ringleader *rl, struct io_uring_cqe *cqe)
 {
     FILE *f = (void*)cqe->user_data;
 
-    size_t iov_count = 2;
     struct iovec * iov = f->rl.in_flight_iovs;
+    size_t iov_count = !!iov[0].iov_len + !!iov[1].iov_len;
     size_t rem = iov[0].iov_len + iov[1].iov_len;
 
-    if(cqe->res < 0)
-    {
-        f->flags |= F_ERR;
-        goto free_arenas;
-    }
+    //fprintf(stdenclave, "rl_stdio_write_done: (file=%p) %i/(%zu)\n",
+    //        f, cqe->res, rem);
+    //for(size_t i = 0; i < iov_count; i++)
+    //{
+    //    fprintf(stdenclave, "--iov[%zu]: %p (%zu) -> %p (%zu)\n",
+    //            i,
+    //            iov[i].iov_base,
+    //            iov[i].iov_len,
+    //            f->rl.iov_shmem[i].iov_base,
+    //            f->rl.iov_shmem[i].iov_len);
+    //}
 
     if((size_t)cqe->res == rem)
     {
         goto free_arenas;
     }
 
-    rem -= cqe->res;
+    if(cqe->res <= 0 || cqe->res > rem)
+    {
+        f->rl.err_res = cqe->res;
+        f->flags |= F_ERR;
+        goto free_arenas;
+    }
 
-    if((size_t)cqe->res > iov[0].iov_len)
+    if((size_t)cqe->res >= iov[0].iov_len)
     {
         cqe->res -= iov[0].iov_len;
-        iov[0].iov_len = 0;
-        iov++;
+        iov[0].iov_base = (void*)((uintptr_t)iov[1].iov_base + cqe->res);
+        iov[0].iov_len = iov[1].iov_len - (cqe->res);
         iov_count--;
     }
 
@@ -100,18 +112,21 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 		iov[0].iov_len -= cnt;
 	}
 #else
+    if(f->wpos == f->wbase && (len == 0 || buf == NULL))
+    {
+        return 0;
+    }
 
     struct ringleader *rl = get_ringleader();
-    struct ringleader_arena * new_arena = musl_ringleader_get_arena(rl,
-            len + sizeof(struct iovec)*2);
-    void * new_shmem = ringleader_arena_apush(new_arena, buf, len);
 
+    /* get buffer arena if not initialzied */
     if(!f->rl.buf_arena)
     {
         f->rl.buf_arena = musl_ringleader_get_arena(rl, BUFSIZ + UNGET);
         ringleader_arena_push(f->rl.buf_arena, UNGET);
     }
 
+    /* migrate to arena buffer, if not in shmem */
     if(!ringleader_arena_contains(f->rl.buf_arena, f->buf))
     {
         /* first stdout, and handling for all stderr prints */
@@ -124,37 +139,82 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
         f->wend += diff;
     }
 
+    //fprintf(stdenclave, "rl_stdio_write: %p %zu %zu\n", f, f->wpos - f->wbase, len);
+
+
+    /* get arena for io_vecs and buffer */
+    struct ringleader_arena * new_arena = musl_ringleader_get_arena(
+        rl,
+        len + sizeof(struct iovec)*2);
+
+    void * new_shmem = NULL;
+    if(buf != NULL && len > 0)
+    {
+        new_shmem = ringleader_arena_apush(new_arena, buf, len);
+    }
+
+    struct ringleader_arena * new_stdio_arena = NULL;
+
+
+    /* wait for current to finish */
     while(f->rl.in_flight_arenas[0] || f->rl.in_flight_arenas[1])
     {
         struct io_uring_cqe * cqe = ringleader_peek_cqe(rl);
         (void)cqe;
+
+        if((f->rl.in_flight_arenas[0] || f->rl.in_flight_arenas[1]) &&
+                (f->wpos != f->wbase) && !new_stdio_arena)
+        {
+            /* we are waiting on a write, let's request our new stdio buffer */
+            new_stdio_arena = musl_ringleader_get_arena(rl, BUFSIZ + UNGET);
+        }
     }
 
-    f->rl.in_flight_arenas[0] = f->rl.buf_arena;
-    f->rl.in_flight_arenas[1] = new_arena;
+    if(f->flags & F_ERR)
+    {
+        ringleader_free_arena(rl, new_arena);
+        ringleader_free_arena(rl, new_stdio_arena);
+        return f->rl.err_res;
+    }
 
-    f->rl.in_flight_iovs[0] = (struct iovec){
-        .iov_base = f->wbase,
-        .iov_len = f->wpos-f->wbase,
-    };
-    f->rl.in_flight_iovs[1] = (struct iovec){
-        .iov_base = new_shmem,
-        .iov_len = len,
-    };
+
+    size_t index = 0;
+
+    memset(f->rl.in_flight_iovs, 0, 2*sizeof(struct iovec));
+
+    if(f->wpos != f->wbase)
+    {
+        f->rl.in_flight_arenas[index]           = f->rl.buf_arena;
+        f->rl.in_flight_iovs[index].iov_base    = f->wbase;
+        f->rl.in_flight_iovs[index++].iov_len   = f->wpos - f->wbase;
+    }
+
+    if(new_shmem)
+    {
+        f->rl.in_flight_arenas[index]           = new_arena;
+        f->rl.in_flight_iovs[index].iov_base    = new_shmem;
+        f->rl.in_flight_iovs[index++].iov_len   = len;
+    }
 
     f->rl.iov_shmem = ringleader_arena_apush(new_arena,
             f->rl.in_flight_iovs,
-            sizeof(struct iovec)*2);
+            sizeof(struct iovec)*index);
 
-    uint32_t sqe = ringleader_prep_writev(rl, f->fd, f->rl.iov_shmem, 2, -1);
+    uint32_t sqe = ringleader_prep_writev(rl, f->fd, f->rl.iov_shmem, index, -1);
     ringleader_set_callback(rl, sqe, rl_stdio_write_done, f);
     ringleader_submit(rl);
 
-    f->rl.buf_arena = musl_ringleader_get_arena(rl, BUFSIZ + UNGET);
-    ringleader_arena_push(f->rl.buf_arena, UNGET);
-    f->buf = ringleader_arena_push(f->rl.buf_arena, BUFSIZ);
-    f->wend = f->buf + f->buf_size;
-    f->wpos = f->wbase = f->buf;
+    if(f->wpos != f->wbase)
+    {
+        /* we submitted our buffer, get a new one */
+        f->rl.buf_arena = (new_stdio_arena) ? new_stdio_arena :
+            musl_ringleader_get_arena(rl, BUFSIZ + UNGET);
+        ringleader_arena_push(f->rl.buf_arena, UNGET);
+        f->buf = ringleader_arena_push(f->rl.buf_arena, BUFSIZ);
+        f->wend = f->buf + f->buf_size;
+        f->wpos = f->wbase = f->buf;
+    }
+
 
     return len;
 

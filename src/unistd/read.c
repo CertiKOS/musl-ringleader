@@ -19,7 +19,10 @@ ssize_t musl_ringleader_read(int fd, void *buf, size_t count)
 
 	void *shmem = ringleader_arena_push(arena, count);
 	if(!shmem)
+    {
+        ringleader_free_arena(rl, arena);
 		return __syscall_ret(-ENOMEM);
+    }
 
 	int32_t id = ringleader_prep_read(rl, fd, shmem, count, -1);
 	ringleader_set_user_data(rl, id, (void *) READ_COOKIE);
@@ -29,8 +32,10 @@ ssize_t musl_ringleader_read(int fd, void *buf, size_t count)
 	if((uint64_t) cqe->user_data == READ_COOKIE){
 		__s32 ret = cqe->res;
 		ringleader_consume_cqe(rl, cqe);
-		if(ret > 0){
-			ringleader_arena_apop(arena, shmem, buf);
+		if(ret > 0)
+		{
+			ringleader_arena_apop(arena, shmem, buf,
+					(size_t) ret < count ? (size_t) ret : count);
 		}
 		ringleader_free_arena(rl, arena);
 		return __syscall_ret(ret);

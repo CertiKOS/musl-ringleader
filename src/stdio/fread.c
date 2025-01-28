@@ -13,12 +13,7 @@ size_t fread(void *restrict destv, size_t size, size_t nmemb, FILE *restrict f)
 	if (!size) nmemb = 0;
 
 #ifdef _CERTIKOS_
-    struct ringleader *rl = get_ringleader();
-    while(f->rl.pending_buf_read)
-    {
-        struct io_uring_cqe * cqe = ringleader_peek_cqe(rl);
-        (void)cqe;
-    }
+    rl_stdio_wait_pending_read(f);
 #endif
 
 	FLOCK(f);

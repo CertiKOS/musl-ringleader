@@ -6,6 +6,19 @@
 #include "certikos_impl.h"
 #include <certikos.h>
 #include <ringleader.h>
+
+void
+rl_stdio_wait_pending_read(FILE *f)
+{
+    struct ringleader *rl = get_ringleader();
+    while(f && f->rl.pending_buf_read)
+    {
+        struct io_uring_cqe * cqe = ringleader_peek_cqe(rl);
+        (void)cqe;
+    }
+}
+
+
 err_t
 rl_stdio_read_done(struct ringleader *rl, struct io_uring_cqe *cqe)
 {
@@ -15,7 +28,8 @@ rl_stdio_read_done(struct ringleader *rl, struct io_uring_cqe *cqe)
 
     f->rl.pending_buf_read = 0;
 
-    if (cnt <= 0) {
+    if (cnt <= 0)
+    {
         f->flags |= cnt ? F_ERR : F_EOF;
         return ERR_OK_CONSUMED;
     }
@@ -51,7 +65,7 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
 	return len;
 #else
 
-    ssize_t cnt = syscall(SYS_read, f->fd, buf, len);
+    ssize_t cnt = musl_ringleader_read(f->fd, buf, len);
 
     if (cnt <= 0) {
         f->flags |= cnt ? F_ERR : F_EOF;
