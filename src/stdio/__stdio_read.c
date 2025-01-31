@@ -78,6 +78,8 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
         /* stdin first read */
         f->rl.buf_arena = musl_ringleader_get_arena(rl, BUFSIZ + UNGET);
         f->buf = ringleader_arena_push(f->rl.buf_arena, UNGET + BUFSIZ);
+        f->buf = buf + UNGET;
+        f->buf_size = BUFSIZ;
     }
 
     uint32_t sqe = ringleader_prep_read(rl, f->fd, f->buf, f->buf_size, -1);
