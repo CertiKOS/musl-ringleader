@@ -24,7 +24,7 @@ int musl_ringleader_chdir(const char *path)
         return __syscall_ret(-ENOMEM);
     }
 
-    int32_t id = ringleader_prep_chdir(rl, path);
+    int32_t id = ringleader_prep_chdir(rl, shmem);
     ringleader_set_user_data(rl, id, (void*)CHDIR_COOKIE);
     ringleader_submit(rl);
 
