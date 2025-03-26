@@ -39,6 +39,7 @@ int musl_ringleader_unlinkat(int fd, const char *path, int flag);
 void musl_ringleader_sync();
 ssize_t musl_ringleader_read(int fd, void *buf, size_t count);
 ssize_t musl_ringleader_write(int fd, const void *buf, size_t count);
+int musl_ringleader_chdir(const char *path);
 
 
 extern struct overheads_t musl_overheads;

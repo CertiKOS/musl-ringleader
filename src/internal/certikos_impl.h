@@ -32,6 +32,7 @@
 #define ACCEPT_COOKIE       (3129646)
 #define LISTEN_COOKIE       (3424060)
 #define READ_COOKIE         (3705175)
+#define CHDIR_COOKIE        (38051777)
 #define IOCTL_COOKIE        (123897897)
 #define LSEEK_COOKIE        (1234010010)
 #define GETDENTS_COOKIE     (1238000297)

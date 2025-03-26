@@ -110,6 +110,7 @@ static inline long __syscall1(long n, long a)
 	{
 		case SYS_fsync: return musl_ringleader_fsync(a);
 		case SYS_fdatasync: return musl_ringleader_fdatasync(a);
+        case SYS_chdir: return musl_ringleader_chdir((void*)a);
 		default: break;
 	}
 #endif
