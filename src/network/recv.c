@@ -16,21 +16,13 @@ ssize_t recv(int fd, void *buf, size_t len, int flags)
 	void *shmem = get_rl_shmem_singleton();
 
 	int id = ringleader_prep_recv(rl, fd, shmem, len, flags);
-	ringleader_set_user_data(rl, id, (void *)RECV_COOKIE);
+	void * cookie = musl_ringleader_set_cookie(rl, id);
 	ringleader_submit(rl);
 
-    struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
-	if(cqe->user_data == RECV_COOKIE){
-		if(cqe->res >= 0){
-			memcpy(buf, shmem, cqe->res);
-		}
-		int ret = cqe->res;
-		ringleader_consume_cqe(rl, cqe);
-		return __syscall_ret(ret);
-	} else {
-        ringleader_consume_cqe(rl, cqe);
-        certikos_puts("Did not get expected ringleader recv cookie");
-        return __syscall_ret(-EINVAL);
-    }
+	int ret = musl_ringleader_wait_result(rl, cookie);
+	if(ret >= 0){
+		memcpy(buf, shmem, ret);
+	}
+	return __syscall_ret(ret);
 	#endif
 }

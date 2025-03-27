@@ -19,25 +19,13 @@ int musl_ringleader_getdents(int fd, struct dirent *buf, unsigned int len)
 
 
 	uint32_t id = ringleader_prep_getdents(rl, fd, shmem, len);
-	ringleader_set_user_data(rl, id, (void *) GETDENTS_COOKIE);
+	void *cookie = musl_ringleader_set_cookie(rl, id);
 	ringleader_submit(rl);
 
-	struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
-	int ret;
+	int ret = musl_ringleader_wait_result(rl, cookie);
 
-	if((uint64_t) cqe->user_data == GETDENTS_COOKIE)
-	{
-		ret =  cqe->res;
-		memcpy(buf, shmem, len);
-	}
-	else
-	{
-		ret = -EIO;
-		certikos_puts("Unxpected ringleader getdents cookie\n");
-	}
-
+	memcpy(buf, shmem, len);
 	ringleader_free_arena(rl, arena);
-	ringleader_consume_cqe(rl, cqe);
 	return ret;
 }
 #endif

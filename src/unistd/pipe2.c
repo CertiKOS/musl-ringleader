@@ -12,38 +12,25 @@
 
 int musl_ringleader_pipe2(int fd[2], int flags)
 {
-    int ret;
-    int32_t id;
-    struct ringleader *rl = get_ringleader();
+	struct ringleader *rl = get_ringleader();
 
-    struct ringleader_arena *arena =
-        musl_ringleader_get_arena(rl, 2*sizeof(int));
-    if(!arena)
-        return __syscall_ret(-ENOMEM);
+	struct ringleader_arena *arena =
+		musl_ringleader_get_arena(rl, 2*sizeof(int));
+	if(!arena)
+		return -ENOMEM;
 
-    void *shmem = ringleader_arena_push(arena, 2*sizeof(int));
-    if(!shmem)
-        return __syscall_ret(-ENOMEM);
+	void *shmem = ringleader_arena_push(arena, 2*sizeof(int));
+	if(!shmem)
+		return -ENOMEM;
 
+	int id = ringleader_prep_pipe2(rl, shmem, flags);
+	void * cookie = musl_ringleader_set_cookie(rl, id);
+	ringleader_submit(rl);
+	int ret = musl_ringleader_wait_result(rl, cookie);
 
-    id = ringleader_prep_pipe2(rl, shmem, flags);
-    ringleader_set_user_data(rl, id, (void*)PIPE2_COOKIE);
-    ringleader_submit(rl);
-
-    struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
-    if((uint64_t) cqe->user_data != PIPE2_COOKIE)
-    {
-        ringleader_consume_cqe(rl, cqe);
-        ringleader_free_arena(rl, arena);
-        certikos_puts("pipe: unxpected ringleader cookie.");
-        return -EINVAL;
-    }
-
-    ret = cqe->res;
-    ringleader_arena_apop(arena, shmem, fd, 2*sizeof(int));
-    ringleader_free_arena(rl, arena);
-    ringleader_consume_cqe(rl, cqe);
-    return ret;
+	ringleader_arena_apop(arena, shmem, fd, 2*sizeof(int));
+	ringleader_free_arena(rl, arena);
+	return ret;
 }
 #endif
 

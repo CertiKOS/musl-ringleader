@@ -73,20 +73,10 @@ int musl_ringleader_fcntl(int fd, int cmd, long arg)
         id = ringleader_prep_fcntl(rl, fd, cmd, arg);
     }
 
-    ringleader_set_user_data(rl, id, (void*)FCNTL_COOKIE);
+    void * cookie = musl_ringleader_set_cookie(rl, id);
     ringleader_submit(rl);
 
-    struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
-    if((uint64_t) cqe->user_data != FCNTL_COOKIE)
-    {
-        ringleader_consume_cqe(rl, cqe);
-        ringleader_free_arena(rl, arena);
-        certikos_puts("Did not get expected ringleader fcntl completion token");
-        return -EINVAL;
-    }
-
-    ret = cqe->res;
-    ringleader_consume_cqe(rl, cqe);
+    ret = musl_ringleader_wait_result(rl, cookie);
 
     if(cp_out_sz)
     {

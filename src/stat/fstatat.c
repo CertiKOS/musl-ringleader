@@ -143,7 +143,7 @@ static int fstatat_kstat(int fd, const char *restrict path, struct stat *restric
 int __fstatat(int fd, const char *restrict path, struct stat *restrict st, int flag)
 {
 	int ret;
-	#ifndef _CERTIKOS_
+#ifndef _CERTIKOS_
 		#ifdef SYS_fstatat
 			if (sizeof((struct kstat){0}.st_atime_sec) < sizeof(time_t)) {
 				ret = fstatat_statx(fd, path, st, flag);
@@ -153,57 +153,48 @@ int __fstatat(int fd, const char *restrict path, struct stat *restrict st, int f
 		#else
 			ret = fstatat_statx(fd, path, st, flag);
 		#endif
-	#else
-		//certikos handling here
+#else /* _CERTIKOS_ */
+		//TODO make this generic to all stats
 		struct ringleader *rl = get_ringleader();
 		void *shmem = get_rl_shmem_singleton();
 
 		char *str_end = strcpy(shmem, path);
 		struct statx *shmem_st_start = (struct statx *) (str_end + 1);
 
-		//copy path in
 		int32_t id = ringleader_prep_statx(rl, fd, shmem, flag, 0x7ff, shmem_st_start);
-		ringleader_set_user_data(rl, id, (void *) STATX_COOKIE);
+		void *cookie = musl_ringleader_set_cookie(rl, id);
 		ringleader_submit(rl);
 
-		struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
-		if((uint64_t) cqe->user_data == STATX_COOKIE){
-			ret = cqe->res;
-			ringleader_consume_cqe(rl, cqe);
-			if(ret) return __syscall_ret(ret);
+		ret = musl_ringleader_wait_result(rl, cookie);
+		if(ret) return __syscall_ret(ret);
 
-			*st = (struct stat){
-				.st_dev = makedev(shmem_st_start->stx_dev_major, shmem_st_start->stx_dev_minor),
-				.st_ino = shmem_st_start->stx_ino,
-				.st_mode = shmem_st_start->stx_mode,
-				.st_nlink = shmem_st_start->stx_nlink,
-				.st_uid = shmem_st_start->stx_uid,
-				.st_gid = shmem_st_start->stx_gid,
-				.st_rdev = makedev(shmem_st_start->stx_rdev_major, shmem_st_start->stx_rdev_minor),
-				.st_size = shmem_st_start->stx_size,
-				.st_blksize = shmem_st_start->stx_blksize,
-				.st_blocks = shmem_st_start->stx_blocks,
-				.st_atim.tv_sec = shmem_st_start->stx_atime.tv_sec,
-				.st_atim.tv_nsec = shmem_st_start->stx_atime.tv_nsec,
-				.st_mtim.tv_sec = shmem_st_start->stx_mtime.tv_sec,
-				.st_mtim.tv_nsec = shmem_st_start->stx_mtime.tv_nsec,
-				.st_ctim.tv_sec = shmem_st_start->stx_ctime.tv_sec,
-				.st_ctim.tv_nsec = shmem_st_start->stx_ctime.tv_nsec,
-		#if _REDIR_TIME64
-				.__st_atim32.tv_sec = shmem_st_start->stx_atime.tv_sec,
-				.__st_atim32.tv_nsec = shmem_st_start->stx_atime.tv_nsec,
-				.__st_mtim32.tv_sec = shmem_st_start->stx_mtime.tv_sec,
-				.__st_mtim32.tv_nsec = shmem_st_start->stx_mtime.tv_nsec,
-				.__st_ctim32.tv_sec = shmem_st_start->stx_ctime.tv_sec,
-				.__st_ctim32.tv_nsec = shmem_st_start->stx_ctime.tv_nsec,
-		#endif
-			};
-		} else {
-			ringleader_consume_cqe(rl, cqe);
-			certikos_puts("Did not get expected ringleader statx completion token");
-			ret = -EINVAL;
-		}
-	#endif
+		*st = (struct stat){
+			.st_dev = makedev(shmem_st_start->stx_dev_major, shmem_st_start->stx_dev_minor),
+			.st_ino = shmem_st_start->stx_ino,
+			.st_mode = shmem_st_start->stx_mode,
+			.st_nlink = shmem_st_start->stx_nlink,
+			.st_uid = shmem_st_start->stx_uid,
+			.st_gid = shmem_st_start->stx_gid,
+			.st_rdev = makedev(shmem_st_start->stx_rdev_major, shmem_st_start->stx_rdev_minor),
+			.st_size = shmem_st_start->stx_size,
+			.st_blksize = shmem_st_start->stx_blksize,
+			.st_blocks = shmem_st_start->stx_blocks,
+			.st_atim.tv_sec = shmem_st_start->stx_atime.tv_sec,
+			.st_atim.tv_nsec = shmem_st_start->stx_atime.tv_nsec,
+			.st_mtim.tv_sec = shmem_st_start->stx_mtime.tv_sec,
+			.st_mtim.tv_nsec = shmem_st_start->stx_mtime.tv_nsec,
+			.st_ctim.tv_sec = shmem_st_start->stx_ctime.tv_sec,
+			.st_ctim.tv_nsec = shmem_st_start->stx_ctime.tv_nsec,
+#if _REDIR_TIME64
+			.__st_atim32.tv_sec = shmem_st_start->stx_atime.tv_sec,
+			.__st_atim32.tv_nsec = shmem_st_start->stx_atime.tv_nsec,
+			.__st_mtim32.tv_sec = shmem_st_start->stx_mtime.tv_sec,
+			.__st_mtim32.tv_nsec = shmem_st_start->stx_mtime.tv_nsec,
+			.__st_ctim32.tv_sec = shmem_st_start->stx_ctime.tv_sec,
+			.__st_ctim32.tv_nsec = shmem_st_start->stx_ctime.tv_nsec,
+#endif /* _REDIR_TIME64 */
+		};
+#endif /* _CERTIKOS_ */
 	return __syscall_ret(ret);
 }
 

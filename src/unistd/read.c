@@ -15,36 +15,27 @@ ssize_t musl_ringleader_read(int fd, void *buf, size_t count)
 	struct ringleader_arena *arena =
 		musl_ringleader_get_arena(rl, count);
 	if(!arena)
-		return __syscall_ret(-ENOMEM);
+		return -ENOMEM;
 
 	void *shmem = ringleader_arena_push(arena, count);
 	if(!shmem)
-    {
-        ringleader_free_arena(rl, arena);
-		return __syscall_ret(-ENOMEM);
-    }
+	{
+		ringleader_free_arena(rl, arena);
+		return -ENOMEM;
+	}
 
 	int32_t id = ringleader_prep_read(rl, fd, shmem, count, -1);
-	ringleader_set_user_data(rl, id, (void *) READ_COOKIE);
+	void *cookie = musl_ringleader_set_cookie(rl, id);
 	ringleader_submit(rl);
 
-	struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
-	if((uint64_t) cqe->user_data == READ_COOKIE){
-		ssize_t ret = (ssize_t)cqe->res < (ssize_t)count ? cqe->res : count;
-		ringleader_consume_cqe(rl, cqe);
-		if(ret > 0)
-		{
-			ringleader_arena_apop(arena, shmem, buf, ret);
-		}
-		ringleader_free_arena(rl, arena);
-		return __syscall_ret(ret);
-	} else {
-		uint64_t cookie = cqe->user_data;
-		ringleader_consume_cqe(rl, cqe);
-		ringleader_free_arena(rl, arena);
-		certikos_printf("read: unexpected cookie %llu", cookie);
-		return __syscall_ret(-EIO);
+	int ret = musl_ringleader_wait_result(rl, cookie);
+
+	if(ret > 0)
+	{
+		memcpy(buf, shmem, ret);
 	}
+	ringleader_free_arena(rl, arena);
+	return ret;
 }
 
 

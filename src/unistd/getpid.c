@@ -7,27 +7,14 @@
 
 pid_t musl_ringleader_getpid()
 {
-    pid_t ret;
-    struct ringleader *rl = get_ringleader();
+	struct ringleader *rl = get_ringleader();
 
-    uint32_t id = ringleader_prep_getpid(rl);
+	uint32_t id = ringleader_prep_getpid(rl);
+	void * cookie = musl_ringleader_set_cookie(rl, id);
 
-    ringleader_set_user_data(rl, id, (void*)GETPID_COOKIE);
-    ringleader_submit(rl);
+	ringleader_submit(rl);
 
-    struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
-    while((uint64_t) cqe->user_data != GETPID_COOKIE)
-    {
-        ringleader_consume_cqe(rl, cqe);
-        certikos_puts("Did not get expected getpid completion token");
-
-        cqe = ringleader_get_cqe(rl);
-    }
-
-    ret = cqe->res;
-    ringleader_consume_cqe(rl, cqe);
-
-    return ret;
+	return musl_ringleader_wait_result(rl, cookie);
 }
 
 #endif

@@ -17,27 +17,17 @@ int accept(int fd, struct sockaddr *restrict addr, socklen_t *restrict len)
 	struct sockaddr *sockaddr_ptr = (struct sockaddr *)((uintptr_t) shmem + (sizeof *len));
 	socklen_t * socklen_ptr = shmem;
 	*socklen_ptr = *len;
-    int                id = ringleader_prep_accept(rl, fd, sockaddr_ptr, socklen_ptr, 0);
-    ringleader_set_user_data(rl, id, (void *)ACCEPT_COOKIE);
-    ringleader_submit(rl);
+	int id = ringleader_prep_accept(rl, fd, sockaddr_ptr, socklen_ptr, 0);
+	void *cookie = musl_ringleader_set_cookie(rl, id);
 
-    struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
-    if (cqe->user_data == ACCEPT_COOKIE)
-    {
-        if (cqe->res >= 0)
-        {
-            memcpy(addr, sockaddr_ptr, *socklen_ptr);
-			*len = *socklen_ptr;
-        }
-        int ret = cqe->res;
-        ringleader_consume_cqe(rl, cqe);
-        return __syscall_ret(ret);
-    }
-    else
-    {
-        ringleader_consume_cqe(rl, cqe);
-        certikos_puts("Did not get expected ringleader accept cookie");
-        return __syscall_ret(-EINVAL);
-    }
+	ringleader_submit(rl);
+
+	int ret = musl_ringleader_wait_result(rl, cookie);
+	if(ret >= 0)
+	{
+		memcpy(addr, sockaddr_ptr, *socklen_ptr);
+		*len = *socklen_ptr;
+	}
+	return __syscall_ret(ret);
 #endif
 }

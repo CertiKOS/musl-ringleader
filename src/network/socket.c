@@ -10,25 +10,11 @@
 
 #ifdef _CERTIKOS_
 int ringleader_socket_helper(int domain, int type, int protocol){
-    struct ringleader* rl = get_ringleader();
-    int index             = ringleader_prep_socket(rl, domain, type, protocol);
-    ringleader_set_user_data(rl, index, (void *) SOCKET_COOKIE);
-    ringleader_submit(rl);
-
-    struct io_uring_cqe* cqe = ringleader_get_cqe(rl);
-    if (cqe->user_data == SOCKET_COOKIE)
-    {
-		int socket = cqe->res;
-		ringleader_consume_cqe(rl, cqe);
-		return socket;
-    }
-    else
-    {
-        ringleader_consume_cqe(rl, cqe);
-        certikos_puts("Did not get expected ringleader socket creation "
-                      "completion token");
-        return __syscall_ret(-EINVAL);
-    }
+	struct ringleader* rl = get_ringleader();
+	int index = ringleader_prep_socket(rl, domain, type, protocol);
+	void * cookie = musl_ringleader_set_cookie(rl, index);
+	ringleader_submit(rl);
+	return musl_ringleader_wait_result(rl, cookie);
 }
 #endif
 

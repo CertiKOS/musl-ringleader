@@ -18,18 +18,9 @@ ssize_t send(int fd, const void *buf, size_t len, int flags)
 	memcpy(shmem, buf, len);
 
 	int id = ringleader_prep_send(rl, fd, shmem, len, flags);
-	ringleader_set_user_data(rl, id, (void *)SEND_COOKIE);
+	void *cookie = musl_ringleader_set_cookie(rl, id);
 	ringleader_submit(rl);
 
-    struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
-	if(cqe->user_data == SEND_COOKIE){
-		int ret = cqe->res;
-		ringleader_consume_cqe(rl, cqe);
-		return __syscall_ret(ret);
-	} else {
-		ringleader_consume_cqe(rl, cqe);
-		certikos_puts("Did not get expected ringleader send cookie");
-		return __syscall_ret(-EINVAL);
-	}
+	return __syscall_ret(musl_ringleader_wait_result(rl, cookie));
 	#endif
 }

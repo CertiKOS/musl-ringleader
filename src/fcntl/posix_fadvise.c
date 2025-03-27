@@ -23,18 +23,9 @@ int posix_fadvise(int fd, off_t base, off_t len, int advice)
 	struct ringleader *rl = get_ringleader();
 
 	uint32_t id = ringleader_prep_fadvise(rl, fd, base, len, advice);
-	ringleader_set_user_data(rl, id, (void *) ADVISE_COOKIE);
+	void * cookie = musl_ringleader_set_cookie(rl, id);
 	ringleader_submit(rl);
 
-	struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
-	if((uint64_t) cqe->user_data == ADVISE_COOKIE){
-		int ret = cqe->res;
-		ringleader_consume_cqe(rl, cqe);
-		return ret;
-	} else {
-		ringleader_consume_cqe(rl, cqe);
-		certikos_puts("Did not get expected ringleader fadvise completion token");
-		return EINVAL;
-	}
+	return __syscall_ret(musl_ringleader_wait_result(rl, cookie));
 	#endif
 }

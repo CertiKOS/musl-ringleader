@@ -11,8 +11,30 @@ struct overheads_t musl_overheads;
 
 #define MIN_ENTRIES 16
 
-uint64_t shmem_cookie =      0x7f7f7f7f00000000;
-uint64_t shmem_cookie_mask = 0xffffffff00000000;
+
+void *
+musl_ringleader_cookie(void)
+{
+    static uintptr_t cookie = MUSL_RINGLEADER_COOKIE_START;
+    cookie = (cookie + 1) & MUSL_RINGLEADER_COOKIE_MASK;
+    return (void *)cookie;
+}
+
+bool
+musl_ringleader_check_cookie(void *cookie, struct io_uring_cqe *cqe)
+{
+    return ((uintptr_t)(cqe->user_data & MUSL_RINGLEADER_COOKIE_MASK) ==
+            ((uintptr_t)cookie));
+}
+
+
+void *
+musl_ringleader_set_cookie(struct ringleader *rl, int32_t sqe_id)
+{
+    void *cookie = musl_ringleader_cookie();
+    ringleader_set_user_data(rl, sqe_id, cookie);
+    return cookie;
+}
 
 
 struct ringleader *static_rl = NULL;
@@ -110,12 +132,28 @@ get_rl_shmem_singleton(void)
     return shmem;
 }
 
+int
+musl_ringleader_wait_result(struct ringleader *rl, void * cookie)
+{
+    int ret;
+    struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
+
+    /* TODO timeout */
+    while(cqe->user_data != (uintptr_t)cookie)
+    {
+        ringleader_consume_cqe(rl, cqe);
+        cqe = ringleader_get_cqe(rl);
+    }
+
+    ret = cqe->res;
+    ringleader_consume_cqe(rl, cqe);
+    return ret;
+}
 
 
 struct ringleader_arena *
 musl_ringleader_get_arena(struct ringleader *rl, size_t size)
 {
-    struct io_uring_cqe* cqe;
 
     size += 0x100;
 
@@ -126,32 +164,20 @@ musl_ringleader_get_arena(struct ringleader *rl, size_t size)
         return ret;
     }
 
-    shmem_cookie += 1;
-    if(ringleader_request_arena(rl, size, (void*)shmem_cookie) != ERR_OK)
+    void *cookie = musl_ringleader_cookie();
+    if(ringleader_request_arena(rl, size, cookie) != ERR_OK)
     {
         fprintf(stdenclave, "Failed to request arena.\n");
         return NULL;
     }
 
-    while(1)
+    /* TODO timeout */
+    struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
+    while(cqe->user_data != (uintptr_t)cookie)
     {
-        cqe = ringleader_get_cqe(rl);
-        if(!cqe)
-        {
-            fprintf(stdenclave, "Failed to get cqe.\n");
-            return NULL;
-        }
-
-        if((uint64_t)(cqe->user_data & shmem_cookie_mask) ==
-                (shmem_cookie & shmem_cookie_mask))
-        {
-            break;
-        }
-
-        fprintf(stdenclave, "get_rl_arena: unexpected cookie\n");
         ringleader_consume_cqe(rl, cqe);
+        cqe = ringleader_get_cqe(rl);
     }
-
 
     if (ringleader_init_arena(rl, cqe, &ret) != ERR_OK)
     {
@@ -164,19 +190,4 @@ musl_ringleader_get_arena(struct ringleader *rl, size_t size)
 
 
 
-int musl_ringleader_wait_result(struct ringleader *rl, uintptr_t cookie)
-{
-    int ret;
-    struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
-
-    while((uintptr_t)cqe->user_data != cookie)
-    {
-        ringleader_consume_cqe(rl, cqe);
-        cqe = ringleader_get_cqe(rl);
-    }
-
-    ret = cqe->res;
-    ringleader_consume_cqe(rl, cqe);
-    return ret;
-}
 

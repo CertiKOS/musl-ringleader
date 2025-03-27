@@ -65,7 +65,7 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
 	return len;
 #else
 
-    ssize_t cnt = musl_ringleader_read(f->fd, buf, len);
+    ssize_t cnt = __syscall_ret(musl_ringleader_read(f->fd, buf, len));
 
     if (cnt <= 0) {
         f->flags |= cnt ? F_ERR : F_EOF;

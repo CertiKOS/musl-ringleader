@@ -46,24 +46,15 @@ int musl_ringleader_ioctl(int fd, int req, void* arg)
 		id = ringleader_prep_ioctl(rl, fd, req, (uint64_t)arg);
 	}
 
-	ringleader_set_user_data(rl, id, (void *) IOCTL_COOKIE);
+	void * cookie = musl_ringleader_set_cookie(rl, id);
 	ringleader_submit(rl);
 
-	struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
-	if((uint64_t) cqe->user_data == IOCTL_COOKIE) {
-		if(arg_size > 0)
-		{
-			memcpy(arg, shmem, arg_size);
-		}
-		__s32 ret = cqe->res;
-		ringleader_consume_cqe(rl, cqe);
-		return ret;
-	} else {
-		ringleader_consume_cqe(rl, cqe);
-		certikos_puts("Unxpected ringleader ioctl cookie\n");
-		return -EIO;
+	int ret = musl_ringleader_wait_result(rl, cookie);
+	if(arg_size > 0)
+	{
+		memcpy(arg, shmem, arg_size);
 	}
-
+	return ret;
 }
 #endif
 
