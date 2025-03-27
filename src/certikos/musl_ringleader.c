@@ -7,25 +7,13 @@
 #include "certikos_impl.h"
 #include "syscall.h"
 
+#define MUSL_RINGLEADER_COOKIE_START    (0x7f7f7f7f00000000)
+#define MIN_ENTRIES                     16
+#define SAFE_OFFSET                     (0x100)
+
+struct ringleader *musl_rl = NULL;
+uintptr_t musl_rl_cookie = MUSL_RINGLEADER_COOKIE_START;
 struct overheads_t musl_overheads;
-
-#define MIN_ENTRIES 16
-
-
-void *
-musl_ringleader_cookie(void)
-{
-    static uintptr_t cookie = MUSL_RINGLEADER_COOKIE_START;
-    cookie = (cookie + 1) & MUSL_RINGLEADER_COOKIE_MASK;
-    return (void *)cookie;
-}
-
-bool
-musl_ringleader_check_cookie(void *cookie, struct io_uring_cqe *cqe)
-{
-    return ((uintptr_t)(cqe->user_data & MUSL_RINGLEADER_COOKIE_MASK) ==
-            ((uintptr_t)cookie));
-}
 
 
 void *
@@ -35,9 +23,6 @@ musl_ringleader_set_cookie(struct ringleader *rl, int32_t sqe_id)
     ringleader_set_user_data(rl, sqe_id, cookie);
     return cookie;
 }
-
-
-struct ringleader *static_rl = NULL;
 
 err_t
 musl_ringleader_arena_callback(struct ringleader *rl, struct io_uring_cqe *cqe)
@@ -59,15 +44,15 @@ musl_ringleader_arena_callback(struct ringleader *rl, struct io_uring_cqe *cqe)
 void
 musl_ringleader_init(void)
 {
-    static_rl = ringleader_factory(MIN_ENTRIES);
-    if(!static_rl)
+    musl_rl = ringleader_factory(MIN_ENTRIES);
+    if(!musl_rl)
     {
         certikos_printf("Fatal: failed to allocate static RingLeader\n");
         return;
     }
 
     err_t err;
-    while ((err = ringleader_init_finished(static_rl)) == ERR_NOT_READY)
+    while ((err = ringleader_init_finished(musl_rl)) == ERR_NOT_READY)
     {
     }
 
@@ -77,26 +62,26 @@ musl_ringleader_init(void)
         return;
     }
 
-    /* prerequest shmem for singleton, stdout, stdin, and stderr */
-    if(ringleader_request_arena_callback(static_rl, SHMEM_SIZE + 0x100,
+    /* prerequest shmem for paths, stdout, stdin, and stderr */
+    if(ringleader_request_arena_callback(musl_rl, PATH_MAX + SAFE_OFFSET,
                 musl_ringleader_arena_callback, NULL) != ERR_OK)
     {
         certikos_printf("Failed to request shmem\n");
     }
 
-    if(ringleader_request_arena_callback(static_rl, BUFSIZ + UNGET + 0x100,
+    if(ringleader_request_arena_callback(musl_rl, BUFSIZ + UNGET + SAFE_OFFSET,
                 musl_ringleader_arena_callback, NULL) != ERR_OK)
     {
         certikos_printf("Failed to request shmem\n");
     }
 
-    if(ringleader_request_arena_callback(static_rl, BUFSIZ + UNGET + 0x100,
+    if(ringleader_request_arena_callback(musl_rl, BUFSIZ + UNGET + SAFE_OFFSET,
                 musl_ringleader_arena_callback, NULL) != ERR_OK)
     {
         certikos_printf("Failed to request shmem\n");
     }
 
-    if(ringleader_request_arena_callback(static_rl, BUFSIZ + UNGET + 0x100,
+    if(ringleader_request_arena_callback(musl_rl, BUFSIZ + UNGET + SAFE_OFFSET,
                 musl_ringleader_arena_callback, NULL) != ERR_OK)
     {
         certikos_printf("Failed to request shmem\n");
@@ -116,21 +101,6 @@ musl_ringleader_init(void)
 }
 
 
-void*
-get_rl_shmem_singleton(void)
-{
-    static void* shmem = NULL;
-    static struct ringleader_arena * singleton_arena = NULL;
-
-    if(!shmem)
-    {
-        struct ringleader * rl = get_ringleader();
-        singleton_arena = musl_ringleader_get_arena(rl, SHMEM_SIZE);
-        shmem = ringleader_arena_push(singleton_arena, SHMEM_SIZE);
-    }
-
-    return shmem;
-}
 
 int
 musl_ringleader_wait_result(struct ringleader *rl, void * cookie)
@@ -141,6 +111,7 @@ musl_ringleader_wait_result(struct ringleader *rl, void * cookie)
     /* TODO timeout */
     while(cqe->user_data != (uintptr_t)cookie)
     {
+        //TODO enqueue into local queue
         ringleader_consume_cqe(rl, cqe);
         cqe = ringleader_get_cqe(rl);
     }
@@ -154,8 +125,7 @@ musl_ringleader_wait_result(struct ringleader *rl, void * cookie)
 struct ringleader_arena *
 musl_ringleader_get_arena(struct ringleader *rl, size_t size)
 {
-
-    size += 0x100;
+    size += SAFE_OFFSET;
 
     /* fast path */
     struct ringleader_arena * ret = ringleader_get_free_arena(rl, size);

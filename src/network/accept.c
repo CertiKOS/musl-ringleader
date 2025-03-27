@@ -9,13 +9,14 @@
 
 int accept(int fd, struct sockaddr *restrict addr, socklen_t *restrict len)
 {
-	#ifndef _CERTIKOS_
+#ifndef _CERTIKOS_
 	return socketcall_cp(accept, fd, addr, len, 0, 0, 0);
-	#else
+#else
     struct ringleader *rl    = get_ringleader();
-	void              *shmem = get_rl_shmem_singleton();
-	struct sockaddr *sockaddr_ptr = (struct sockaddr *)((uintptr_t) shmem + (sizeof *len));
-	socklen_t * socklen_ptr = shmem;
+	struct ringleader_arena * arena = musl_ringleader_get_arena(rl,
+			sizeof(socklen_t) + sizeof(struct sockaddr));
+	socklen_t *socklen_ptr = ringleader_arena_push(arena, sizeof(socklen_t));
+	struct sockaddr *sockaddr_ptr = ringleader_arena_push(arena, sizeof(struct sockaddr));
 	*socklen_ptr = *len;
 	int id = ringleader_prep_accept(rl, fd, sockaddr_ptr, socklen_ptr, 0);
 	void *cookie = musl_ringleader_set_cookie(rl, id);
@@ -28,6 +29,7 @@ int accept(int fd, struct sockaddr *restrict addr, socklen_t *restrict len)
 		memcpy(addr, sockaddr_ptr, *socklen_ptr);
 		*len = *socklen_ptr;
 	}
+	ringleader_free_arena(rl, arena);
 	return __syscall_ret(ret);
 #endif
 }

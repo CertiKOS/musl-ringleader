@@ -16,7 +16,6 @@
 int musl_ringleader_ioctl(int fd, int req, void* arg)
 {
 	struct ringleader *rl = get_ringleader();
-	void *shmem = get_rl_shmem_singleton();
 	int32_t id;
 	size_t arg_size = 0;
 
@@ -35,11 +34,14 @@ int musl_ringleader_ioctl(int fd, int req, void* arg)
 			break;
 	}
 
+	struct ringleader_arena *arena = NULL;
+	void * shmem = NULL;
 	if(arg_size > 0)
 	{
-		if(shmem == NULL) return -ENOMEM;
-		memcpy(shmem, arg, arg_size);
-		id = ringleader_prep_ioctl(rl, fd, req, ringleader_calc_proxy_addr(rl, shmem));
+		arena = musl_ringleader_get_arena(rl, arg_size);
+		shmem = ringleader_arena_apush(arena, arg, arg_size);
+		id = ringleader_prep_ioctl(rl, fd, req,
+				ringleader_calc_proxy_addr(rl, shmem));
 	}
 	else
 	{
@@ -53,6 +55,7 @@ int musl_ringleader_ioctl(int fd, int req, void* arg)
 	if(arg_size > 0)
 	{
 		memcpy(arg, shmem, arg_size);
+		ringleader_free_arena(rl, arena);
 	}
 	return ret;
 }

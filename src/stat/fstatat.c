@@ -10,6 +10,7 @@
 #ifdef _CERTIKOS_
 #include "certikos_impl.h"
 #include "ringleader.h"
+#include <limits.h>
 #endif
 
 struct statx {
@@ -144,30 +145,35 @@ int __fstatat(int fd, const char *restrict path, struct stat *restrict st, int f
 {
 	int ret;
 #ifndef _CERTIKOS_
-		#ifdef SYS_fstatat
-			if (sizeof((struct kstat){0}.st_atime_sec) < sizeof(time_t)) {
-				ret = fstatat_statx(fd, path, st, flag);
-				if (ret!=-ENOSYS) return __syscall_ret(ret);
-			}
-			ret = fstatat_kstat(fd, path, st, flag);
-		#else
-			ret = fstatat_statx(fd, path, st, flag);
-		#endif
+
+#ifdef SYS_fstatat
+	if (sizeof((struct kstat){0}.st_atime_sec) < sizeof(time_t)) {
+		ret = fstatat_statx(fd, path, st, flag);
+		if (ret!=-ENOSYS) return __syscall_ret(ret);
+	}
+	ret = fstatat_kstat(fd, path, st, flag);
+#else
+	ret = fstatat_statx(fd, path, st, flag);
+#endif /* SYS_fstatat */
+
 #else /* _CERTIKOS_ */
-		//TODO make this generic to all stats
-		struct ringleader *rl = get_ringleader();
-		void *shmem = get_rl_shmem_singleton();
+	//TODO make this generic to all stats
+	struct ringleader *rl = get_ringleader();
+	struct ringleader_arena *arena =
+		musl_ringleader_get_arena(rl, PATH_MAX + sizeof(struct statx));
 
-		char *str_end = strcpy(shmem, path);
-		struct statx *shmem_st_start = (struct statx *) (str_end + 1);
+	char * shmem_path =
+		ringleader_arena_spush(arena, path);
+	struct statx *shmem_st_start =
+		ringleader_arena_push(arena, sizeof(struct statx));
 
-		int32_t id = ringleader_prep_statx(rl, fd, shmem, flag, 0x7ff, shmem_st_start);
-		void *cookie = musl_ringleader_set_cookie(rl, id);
-		ringleader_submit(rl);
+	int id = ringleader_prep_statx(rl, fd, shmem_path, flag, 0x7ff, shmem_st_start);
+	void *cookie = musl_ringleader_set_cookie(rl, id);
+	ringleader_submit(rl);
 
-		ret = musl_ringleader_wait_result(rl, cookie);
-		if(ret) return __syscall_ret(ret);
-
+	ret = musl_ringleader_wait_result(rl, cookie);
+	if(!ret)
+	{
 		*st = (struct stat){
 			.st_dev = makedev(shmem_st_start->stx_dev_major, shmem_st_start->stx_dev_minor),
 			.st_ino = shmem_st_start->stx_ino,
@@ -195,6 +201,8 @@ int __fstatat(int fd, const char *restrict path, struct stat *restrict st, int f
 #endif /* _REDIR_TIME64 */
 		};
 #endif /* _CERTIKOS_ */
+	}
+	ringleader_free_arena(rl, arena);
 	return __syscall_ret(ret);
 }
 

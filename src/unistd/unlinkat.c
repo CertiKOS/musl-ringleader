@@ -5,20 +5,26 @@
 #include <certikos.h>
 #include <certikos/profile.h>
 #include <string.h>
+#include <limits.h>
+#include <ringleader.h>
 #include "certikos_impl.h"
-#include "ringleader.h"
 
 int musl_ringleader_unlinkat(int fd, const char *path, int flag)
 {
 	struct ringleader *rl = get_ringleader();
 
-	void *shmem = get_rl_shmem_singleton();
+	struct ringleader_arena * arena = musl_ringleader_get_arena(rl, PATH_MAX);
+	char * shmem = ringleader_arena_push(arena, PATH_MAX);
 	strcpy(shmem, path);
 
 	int id = ringleader_prep_unlinkat(rl, fd, shmem, flag);
 	void * cookie = musl_ringleader_set_cookie(rl, id);
+
 	ringleader_submit(rl);
-	return musl_ringleader_wait_result(rl, cookie);
+	int ret = musl_ringleader_wait_result(rl, cookie);
+
+	ringleader_free_arena(rl, arena);
+	return ret;
 }
 #endif
 

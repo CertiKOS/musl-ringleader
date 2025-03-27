@@ -15,13 +15,15 @@ int bind(int fd, const struct sockaddr *addr, socklen_t len)
 	return socketcall(bind, fd, addr, len, 0, 0, 0);
 	#else
 	struct ringleader *rl = get_ringleader();
-	void *shmem = get_rl_shmem_singleton();
-	memcpy(shmem, addr, len);
+	struct ringleader_arena *arena = musl_ringleader_get_arena(rl, len);
+	void * shmem = ringleader_arena_apush(arena, addr, len);
 
 	int id = ringleader_prep_bind(rl, fd, shmem, len);
 	void * cookie = musl_ringleader_set_cookie(rl, id);
 	ringleader_submit(rl);
 
-	return __syscall_ret(musl_ringleader_wait_result(rl, cookie));
+	int ret = musl_ringleader_wait_result(rl, cookie);
+	ringleader_free_arena(rl, arena);
+	return __syscall_ret(ret);
 #endif
 }

@@ -13,7 +13,8 @@ ssize_t recv(int fd, void *buf, size_t len, int flags)
 	return recvfrom(fd, buf, len, flags, 0, 0);
 	#else
 	struct ringleader *rl = get_ringleader();
-	void *shmem = get_rl_shmem_singleton();
+	struct ringleader_arena * arena = musl_ringleader_get_arena(rl, len);
+	void * shmem = ringleader_arena_push(arena, len);
 
 	int id = ringleader_prep_recv(rl, fd, shmem, len, flags);
 	void * cookie = musl_ringleader_set_cookie(rl, id);
@@ -23,6 +24,7 @@ ssize_t recv(int fd, void *buf, size_t len, int flags)
 	if(ret >= 0){
 		memcpy(buf, shmem, ret);
 	}
+	ringleader_free_arena(rl, arena);
 	return __syscall_ret(ret);
 	#endif
 }

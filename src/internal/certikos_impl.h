@@ -8,32 +8,31 @@
 #include <certikos.h>
 #include "stdio_impl.h"
 
-#define SHMEM_SIZE          (0x4000)
-
-#define MUSL_RINGLEADER_COOKIE_START (0x7f7f7f7f00000000)
-#define MUSL_RINGLEADER_COOKIE_MASK  (0xffffffff00000000)
-
-void *  musl_ringleader_cookie(void);
-bool    musl_ringleader_check_cookie(void *cookie, struct io_uring_cqe *cqe);
 void *  musl_ringleader_set_cookie(struct ringleader *rl, int32_t sqe_id);
-void    musl_ringleader_init(void);
-void *  get_rl_shmem_singleton(void);
-void *  alloc_new_rl_shmem(int size);
 struct  ringleader_arena * musl_ringleader_get_arena(struct ringleader * rl, size_t size);
 int     musl_ringleader_wait_result(struct ringleader *rl, void * cookie);
+void    musl_ringleader_init(void);
 
 static inline struct ringleader*
 get_ringleader(void)
 {
-    extern struct ringleader *static_rl;
-    if (static_rl == NULL)
-    {
-        musl_ringleader_init();
-    }
-
-    return static_rl;
+	extern struct ringleader *musl_rl;
+	return musl_rl;
 }
 
+static inline void *
+musl_ringleader_cookie(void)
+{
+	extern uintptr_t musl_rl_cookie;
+	//TODO atomic for signals?
+	musl_rl_cookie += 1;
+	return (void *)musl_rl_cookie;
+}
 
+static inline bool
+musl_ringleader_check_cookie(void *cookie, struct io_uring_cqe *cqe)
+{
+    return ((uintptr_t)(cqe->user_data) == ((uintptr_t)cookie));
+}
 
 #endif
