@@ -30,12 +30,11 @@ ssize_t musl_ringleader_read(int fd, void *buf, size_t count)
 
 	struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
 	if((uint64_t) cqe->user_data == READ_COOKIE){
-		__s32 ret = cqe->res;
+		ssize_t ret = (ssize_t)cqe->res < (ssize_t)count ? cqe->res : count;
 		ringleader_consume_cqe(rl, cqe);
 		if(ret > 0)
 		{
-			ringleader_arena_apop(arena, shmem, buf,
-					(size_t) ret < count ? (size_t) ret : count);
+			ringleader_arena_apop(arena, shmem, buf, ret);
 		}
 		ringleader_free_arena(rl, arena);
 		return __syscall_ret(ret);
