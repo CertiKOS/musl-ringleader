@@ -9,9 +9,19 @@
 #include "stdio_impl.h"
 
 void *  musl_ringleader_set_cookie(struct ringleader *rl, int32_t sqe_id);
-struct  ringleader_arena * musl_ringleader_get_arena(struct ringleader * rl, size_t size);
+struct  ringleader_arena * musl_ringleader_get_arena(
+			struct ringleader * rl,
+			size_t size);
 int     musl_ringleader_wait_result(struct ringleader *rl, void * cookie);
 void    musl_ringleader_init(void);
+void *  musl_ringleader_statx_async(
+			struct ringleader *rl,
+			struct ringleader_arena *restrict arena,
+			int dirfd,
+			const char *restrict path,
+			int flag,
+			unsigned int mask,
+			void ** out_shmem_statxbuff);
 
 static inline struct ringleader*
 get_ringleader(void)

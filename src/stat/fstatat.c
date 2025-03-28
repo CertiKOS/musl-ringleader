@@ -38,6 +38,62 @@ struct statx {
 	uint64_t spare[14];
 };
 
+#ifdef _CERTIKOS_
+
+#ifdef SYS_fstatat
+/* force statx to be used */
+#undef SYS_fstatat
+#endif
+
+void *
+musl_ringleader_statx_async(
+		struct ringleader *rl,
+		struct ringleader_arena *restrict arena,
+		int dirfd,
+		const char *restrict path,
+		int flag,
+		unsigned int mask,
+		void ** out_shmem_statxbuff)
+{
+	char * shmem_path    = ringleader_arena_spush(arena, path);
+	*out_shmem_statxbuff = ringleader_arena_push(arena, sizeof(struct statx));
+
+	int id = ringleader_prep_statx(rl, dirfd, shmem_path, flag, mask,
+			*out_shmem_statxbuff);
+
+	void *cookie = musl_ringleader_set_cookie(rl, id);
+	ringleader_submit(rl);
+
+	return cookie;
+}
+
+int
+musl_ringleader_statx(
+		int dirfd,
+		const char *restrict path,
+		int flag,
+		unsigned int mask,
+		void *restrict statxbuff)
+{
+	struct ringleader *rl = get_ringleader();
+	struct ringleader_arena *arena =
+		musl_ringleader_get_arena(rl, PATH_MAX + sizeof(struct statx));
+
+	void *shmem_statxbuff;
+	void *cookie = musl_ringleader_statx_async(rl, arena, dirfd, path, flag,
+			mask, &shmem_statxbuff);
+
+	int ret = musl_ringleader_wait_result(rl, cookie);
+	if(!ret)
+	{
+		memcpy(statxbuff, shmem_statxbuff, sizeof(struct statx));
+	}
+
+	ringleader_free_arena(rl, arena);
+	return ret;
+}
+#endif
+
 static int fstatat_statx(int fd, const char *restrict path, struct stat *restrict st, int flag)
 {
 	struct statx stx;
@@ -144,8 +200,6 @@ static int fstatat_kstat(int fd, const char *restrict path, struct stat *restric
 int __fstatat(int fd, const char *restrict path, struct stat *restrict st, int flag)
 {
 	int ret;
-#ifndef _CERTIKOS_
-
 #ifdef SYS_fstatat
 	if (sizeof((struct kstat){0}.st_atime_sec) < sizeof(time_t)) {
 		ret = fstatat_statx(fd, path, st, flag);
@@ -155,58 +209,7 @@ int __fstatat(int fd, const char *restrict path, struct stat *restrict st, int f
 #else
 	ret = fstatat_statx(fd, path, st, flag);
 #endif /* SYS_fstatat */
-
-#else /* _CERTIKOS_ */
-	//TODO make this generic to all stats
-	struct ringleader *rl = get_ringleader();
-	struct ringleader_arena *arena =
-		musl_ringleader_get_arena(rl, PATH_MAX + sizeof(struct statx));
-
-	char * shmem_path =
-		ringleader_arena_spush(arena, path);
-	struct statx *shmem_st_start =
-		ringleader_arena_push(arena, sizeof(struct statx));
-
-	int id = ringleader_prep_statx(rl, fd, shmem_path, flag, 0x7ff, shmem_st_start);
-	void *cookie = musl_ringleader_set_cookie(rl, id);
-	ringleader_submit(rl);
-
-	ret = musl_ringleader_wait_result(rl, cookie);
-	if(!ret)
-	{
-		*st = (struct stat){
-			.st_dev = makedev(shmem_st_start->stx_dev_major, shmem_st_start->stx_dev_minor),
-			.st_ino = shmem_st_start->stx_ino,
-			.st_mode = shmem_st_start->stx_mode,
-			.st_nlink = shmem_st_start->stx_nlink,
-			.st_uid = shmem_st_start->stx_uid,
-			.st_gid = shmem_st_start->stx_gid,
-			.st_rdev = makedev(shmem_st_start->stx_rdev_major, shmem_st_start->stx_rdev_minor),
-			.st_size = shmem_st_start->stx_size,
-			.st_blksize = shmem_st_start->stx_blksize,
-			.st_blocks = shmem_st_start->stx_blocks,
-			.st_atim.tv_sec = shmem_st_start->stx_atime.tv_sec,
-			.st_atim.tv_nsec = shmem_st_start->stx_atime.tv_nsec,
-			.st_mtim.tv_sec = shmem_st_start->stx_mtime.tv_sec,
-			.st_mtim.tv_nsec = shmem_st_start->stx_mtime.tv_nsec,
-			.st_ctim.tv_sec = shmem_st_start->stx_ctime.tv_sec,
-			.st_ctim.tv_nsec = shmem_st_start->stx_ctime.tv_nsec,
-#if _REDIR_TIME64
-			.__st_atim32.tv_sec = shmem_st_start->stx_atime.tv_sec,
-			.__st_atim32.tv_nsec = shmem_st_start->stx_atime.tv_nsec,
-			.__st_mtim32.tv_sec = shmem_st_start->stx_mtime.tv_sec,
-			.__st_mtim32.tv_nsec = shmem_st_start->stx_mtime.tv_nsec,
-			.__st_ctim32.tv_sec = shmem_st_start->stx_ctime.tv_sec,
-			.__st_ctim32.tv_nsec = shmem_st_start->stx_ctime.tv_nsec,
-#endif /* _REDIR_TIME64 */
-		};
-#endif /* _CERTIKOS_ */
-	}
-	ringleader_free_arena(rl, arena);
 	return __syscall_ret(ret);
 }
 
 weak_alias(__fstatat, fstatat);
-
-
-//__fstatat does all the rerouting based on what goes where, I should just fork that in the case of CERTIKOS, I think thats fine fo rnow since this is confusing

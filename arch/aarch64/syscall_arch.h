@@ -184,6 +184,15 @@ static inline long __syscall4(long n, long a, long b, long c, long d)
 
 static inline long __syscall5(long n, long a, long b, long c, long d, long e)
 {
+#ifdef _CERTIKOS_
+	/* MUSL RINGLEADER OVERRIDES */
+	switch(n)
+	{
+		case SYS_statx: return musl_ringleader_statx(a, (void*)b, c, d, (void*)e);
+		default: break;
+	}
+#endif
+
 	register long x0 __asm__("x0") = n;
 	register long x1 __asm__("x1") = a;
 	register long x2 __asm__("x2") = b;
