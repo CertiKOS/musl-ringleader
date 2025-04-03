@@ -108,7 +108,6 @@ musl_rl_async_fd_finish_all(struct ringleader *rl)
 			/* Ignore any cookies since this should be called at exit time */
 			(void) ringleader_peek_cqe(rl);
 		}
-		fprintf(stdenclave, "musl_rl_async_fd_finish_all: closed fd=%d off=%zd sz=%zu\n", i, musl_rl_async_fds[i].offset, musl_rl_async_fds[i].file_size);
 	}
 }
 
