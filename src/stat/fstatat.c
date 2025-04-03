@@ -47,15 +47,14 @@ struct statx {
 
 void *
 musl_ringleader_statx_async(
-		struct ringleader *rl,
-		struct ringleader_arena *restrict arena,
+		struct ringleader * rl,
+		struct ringleader_arena * arena,
 		int dirfd,
-		const char *restrict path,
+		char * shmem_path,
 		int flag,
 		unsigned int mask,
 		void ** out_shmem_statxbuff)
 {
-	char * shmem_path    = ringleader_arena_spush(arena, path);
 	*out_shmem_statxbuff = ringleader_arena_push(arena, sizeof(struct statx));
 
 	int id = ringleader_prep_statx(rl, dirfd, shmem_path, flag, mask,
@@ -79,9 +78,12 @@ musl_ringleader_statx(
 	struct ringleader_arena *arena =
 		musl_ringleader_get_arena(rl, PATH_MAX + sizeof(struct statx));
 
+	char *shmem_path = ringleader_arena_push(arena, PATH_MAX);
+	strncpy(shmem_path, path, PATH_MAX);
+
 	void *shmem_statxbuff;
-	void *cookie = musl_ringleader_statx_async(rl, arena, dirfd, path, flag,
-			mask, &shmem_statxbuff);
+	void *cookie = musl_ringleader_statx_async(rl, arena, dirfd, shmem_path,
+			flag, mask, &shmem_statxbuff);
 
 	int ret = musl_ringleader_wait_result(rl, cookie);
 	if(!ret)

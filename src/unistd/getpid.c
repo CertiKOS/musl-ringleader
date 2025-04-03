@@ -21,5 +21,16 @@ pid_t musl_ringleader_getpid()
 
 pid_t getpid(void)
 {
+#ifdef _CERTIKOS_
+	/* optimization: avoid syscall on every getpid() call */
+	static pid_t pid;
+	int do_once = 0;
+	if (do_once == 0) {
+		pid = __syscall(SYS_getpid);
+		do_once = 1;
+	}
+	return pid;
+#else /* _CERTIKOS_ */
 	return __syscall(SYS_getpid);
+#endif /* !_CERTIKOS_ */
 }

@@ -19,7 +19,7 @@ int musl_ringleader_ioctl(int fd, int req, void* arg);
 int musl_ringleader_getdents(int fd, struct dirent *buf, unsigned int len);
 int musl_ringleader_fcntl(int fd, int cmd, long arg);
 int musl_ringleader_openat(int fd, const char *filename, int flags, mode_t mode);
-int musl_ringleader_lseek(int fd, off_t offset, int whence);
+off_t musl_ringleader_lseek(int fd, off_t offset, int whence);
 int musl_ringleader_fsync(int fd);
 int musl_ringleader_fdatasync(int fd);
 int musl_ringleader_mkdirat(int fd, const char *filename, mode_t mode);
@@ -33,6 +33,7 @@ ssize_t musl_ringleader_read(int fd, void *buf, size_t count);
 ssize_t musl_ringleader_write(int fd, const void *buf, size_t count);
 int musl_ringleader_chdir(const char *path);
 int musl_ringleader_statx(int dirfd, const char *restrict path, int flag, unsigned int mask, void *restrict statxbuff);
+int musl_ringleader_close(int fd);
 
 
 extern struct overheads_t musl_overheads;

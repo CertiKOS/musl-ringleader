@@ -6,9 +6,15 @@
 #include <ringleader.h>
 #include <string.h>
 
-int musl_ringleader_lseek(int fd, off_t offset, int whence)
+off_t musl_ringleader_lseek(int fd, off_t offset, int whence)
 {
 	struct ringleader *rl = get_ringleader();
+
+	if(musl_rl_async_fd_check(fd))
+	{
+		return musl_rl_async_fd_lseek(fd, offset, whence);
+	}
+
 	int32_t id = ringleader_prep_lseek(rl, fd, offset, whence);
 	void * cookie = musl_ringleader_set_cookie(rl, id);
 	ringleader_submit(rl);

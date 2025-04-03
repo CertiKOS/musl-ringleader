@@ -101,24 +101,67 @@ musl_ringleader_init(void)
 }
 
 
-
 int
 musl_ringleader_wait_result(struct ringleader *rl, void * cookie)
 {
-    int ret;
-    struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
+	static struct {
+		struct {
+			void * cookie;
+			int result;
+		} * data;
+		size_t capacity;
+		size_t size;
+	} results = {NULL, 8, 0};
 
-    /* TODO timeout */
-    while(cqe->user_data != (uintptr_t)cookie)
-    {
-        //TODO enqueue into local queue
-        ringleader_consume_cqe(rl, cqe);
-        cqe = ringleader_get_cqe(rl);
-    }
+	int ret = -1;
 
-    ret = cqe->res;
-    ringleader_consume_cqe(rl, cqe);
-    return ret;
+	for(size_t i = 0; i < results.size; i++)
+	{
+		if(results.data[i].cookie == cookie)
+		{
+			ret = results.data[i].result;
+			results.data[i] = results.data[--results.size];
+			return ret;
+		}
+	}
+
+	while(1)
+	{
+		struct io_uring_cqe *cqe = ringleader_peek_cqe(rl);
+
+		/* allocate results array in spare time */
+		if(cqe == NULL || cqe->user_data != (uintptr_t)cookie)
+		{
+			if(results.data == NULL || results.size == results.capacity)
+			{
+				results.capacity *= 2;
+				results.data = realloc(results.data,
+						results.capacity * sizeof(*results.data));
+				if(!results.data)
+				{
+					fprintf(stdenclave, "Failed to reallocate results array.\n");
+					return -1;
+				}
+			}
+
+			if(cqe && cqe->user_data != (uintptr_t)cookie)
+			{
+				results.data[results.size].cookie = (void *)cqe->user_data;
+				results.data[results.size].result = cqe->res;
+				results.size++;
+				ringleader_consume_cqe(rl, cqe);
+			}
+		}
+		else
+		{
+			ret = cqe->res;
+			ringleader_consume_cqe(rl, cqe);
+			return ret;
+		}
+	}
+
+	fprintf(stdenclave, "Failed to wait for result.\n");
+	return ret;
 }
 
 

@@ -8,6 +8,8 @@
 #include <certikos.h>
 #include "stdio_impl.h"
 
+
+
 void *  musl_ringleader_set_cookie(struct ringleader *rl, int32_t sqe_id);
 struct  ringleader_arena * musl_ringleader_get_arena(
 			struct ringleader * rl,
@@ -16,12 +18,40 @@ int     musl_ringleader_wait_result(struct ringleader *rl, void * cookie);
 void    musl_ringleader_init(void);
 void *  musl_ringleader_statx_async(
 			struct ringleader *rl,
-			struct ringleader_arena *restrict arena,
+			struct ringleader_arena * arena,
 			int dirfd,
-			const char *restrict path,
+			char * shmem_path,
 			int flag,
 			unsigned int mask,
 			void ** out_shmem_statxbuff);
+void     musl_rl_async_fd_init(
+			int fd,
+			unsigned int flags,
+			mode_t mode,
+			size_t block_size,
+			size_t block_count,
+			size_t file_size);
+bool    musl_rl_async_fd_check(int fd);
+void    musl_rl_async_fd_finish_all(struct ringleader *rl);
+int     musl_rl_async_fd_close(
+			struct ringleader *rl,
+			int fd);
+err_t   musl_rl_async_pwrite_done(
+			struct ringleader *rl,
+			struct io_uring_cqe *cqe);
+ssize_t musl_rl_async_pwrite(
+			struct ringleader *rl,
+			struct ringleader_arena *arena,
+			int fd,
+			const void *buf,
+			size_t count,
+			off_t offset);
+off_t   musl_rl_async_fd_lseek(
+			int fd,
+			off_t offset,
+			int whence);
+
+
 
 static inline struct ringleader*
 get_ringleader(void)
@@ -44,5 +74,8 @@ musl_ringleader_check_cookie(void *cookie, struct io_uring_cqe *cqe)
 {
     return ((uintptr_t)(cqe->user_data) == ((uintptr_t)cookie));
 }
+
+
+
 
 #endif

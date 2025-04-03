@@ -7,9 +7,11 @@ config.mak
 lib/musl-gcc.specs
 /obj/
 
-ringleader
-include/certikos
-src/certikos-export
+/include/ringleader.h
+/include/ringleader
+/include/certikos
+/src/ringleader
+/src/certikos-export
 *.swp
 *.swo
 
