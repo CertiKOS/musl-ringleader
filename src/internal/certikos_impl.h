@@ -36,9 +36,6 @@ void    musl_rl_async_fd_finish_all(struct ringleader *rl);
 int     musl_rl_async_fd_close(
 			struct ringleader *rl,
 			int fd);
-err_t   musl_rl_async_pwrite_done(
-			struct ringleader *rl,
-			struct io_uring_cqe *cqe);
 ssize_t musl_rl_async_pwrite(
 			struct ringleader *rl,
 			struct ringleader_arena *arena,

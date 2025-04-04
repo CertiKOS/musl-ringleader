@@ -69,7 +69,7 @@ int musl_ringleader_openat(int dirfd, const char *filename, int flags, mode_t mo
 	size_t arena_size = PATH_MAX;
 
 	int do_stat = 0;
-	if ((flags & O_WRONLY) && !(flags & O_DIRECTORY) && !(flags & O_PATH))
+	if (!(flags & O_DIRECTORY) && !(flags & O_PATH))
 	{
 		do_stat = 1;
 		arena_size += PATH_MAX + sizeof(struct statx);

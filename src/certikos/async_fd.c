@@ -17,7 +17,6 @@ struct musl_rl_async_fd
 	size_t block_size;
 	size_t file_size;
 	size_t n_writes_pending;
-	struct musl_rl_async_pwrite_ctx *pwrite_ctxs;
 
 
 	size_t n_reads_pending;
@@ -59,16 +58,6 @@ musl_rl_async_fd_init(
 	if(file->flags & O_APPEND)
 	{
 		file->offset = file_size;
-	}
-
-	if(!file->pwrite_ctxs)
-	{
-		file->pwrite_ctxs = malloc(sizeof(*file->pwrite_ctxs) * 16);
-		if(!file->pwrite_ctxs)
-		{
-			fprintf(stdenclave, "musl_ringleader_config_async: malloc failed\n");
-			exit(1);
-		}
 	}
 
 	/* shmem is io_uring registered, so we can use O_DIRECT */
@@ -154,13 +143,24 @@ musl_rl_async_fd_close(
 	return 0;
 }
 
-err_t
+void
 musl_rl_async_pwrite_done(
 		struct ringleader *rl,
-		struct io_uring_cqe *cqe)
+		ringleader_promise_t promise,
+		void *data)
 {
-	struct musl_rl_async_pwrite_ctx *ctx = (void*)cqe->user_data;
+	struct io_uring_cqe *cqe = data;
+
+	struct musl_rl_async_pwrite_ctx *ctx =
+		ringleader_promise_get_ctx_fast(rl, promise,
+				struct musl_rl_async_pwrite_ctx);
+
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[ctx->fd];
+
+	if(cqe->res < 0 && file->errcode == 0)
+	{
+		file->errcode = -cqe->res;
+	}
 
 	if(file->n_writes_pending == 0 || !file->file_open)
 	{
@@ -174,16 +174,10 @@ musl_rl_async_pwrite_done(
 		(void) musl_rl_async_fd_close(rl, ctx->fd);
 	}
 
-	if(cqe->res < 0 && file->errcode == 0)
-	{
-		file->errcode = -cqe->res;
-	}
-
 done:
-	ringleader_free_arena(rl, ctx->arena);
-	free(ctx);
+	ringleader_promise_set_result_and_free(rl, promise, (void*)(uintptr_t)cqe->res);
+	ringleader_arena_free(rl, ctx->arena);
 	ringleader_consume_cqe(rl, cqe);
-	return ERR_OK_CONSUMED;
 }
 
 
@@ -204,19 +198,20 @@ musl_rl_async_pwrite(
 
 	int id = ringleader_prep_write(rl, fd, shmem, count, final_offset);
 
-	//TODO non-malloc implementation
-	struct musl_rl_async_pwrite_ctx *ctx = malloc(sizeof(*ctx));
-	if(!ctx)
+	ringleader_promise_t promise = ringleader_sqe_then(rl, id,
+			(void*)musl_rl_async_pwrite_done);
+	if(promise == RINGLEADER_PROMISE_INVALID)
+	{
 		return 0;
+	}
 
+	struct musl_rl_async_pwrite_ctx *ctx =
+		ringleader_promise_get_ctx_fast(rl, promise,
+				struct musl_rl_async_pwrite_ctx);
 	ctx->arena = arena;
 	ctx->fd = fd;
 
-	if(ringleader_set_callback(rl, id, musl_rl_async_pwrite_done, ctx) != ERR_OK)
-	{
-		free(ctx);
-		return 0;
-	}
+	ringleader_submit(rl);
 
 	musl_rl_async_fds[fd].n_writes_pending++;
 
@@ -228,9 +223,6 @@ musl_rl_async_pwrite(
 	{
 		musl_rl_async_fds[fd].offset += count;
 	}
-
-	//TODO check for full SQ
-	ringleader_submit(rl);
 
 	return count;
 }

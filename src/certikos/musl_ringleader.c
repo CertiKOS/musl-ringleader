@@ -24,20 +24,18 @@ musl_ringleader_set_cookie(struct ringleader *rl, int32_t sqe_id)
     return cookie;
 }
 
-err_t
-musl_ringleader_arena_callback(struct ringleader *rl, struct io_uring_cqe *cqe)
+void
+musl_ringleader_arena_callback(
+        struct ringleader *rl,
+        ringleader_promise_t promise,
+        void *data)
 {
-    struct ringleader_arena *arena;
+    struct ringleader_arena *arena = data;
 
-    if(ringleader_init_arena(rl, cqe, &arena) != ERR_OK)
-    {
-        certikos_printf("Failed to init arena\n");
-    } else {
-        ringleader_free_arena(rl, arena);
-    }
+    /* this was prefetched memory */
+    (void) ringleader_arena_free(rl, arena);
 
-    ringleader_consume_cqe(rl, cqe);
-    return ERR_OK_CONSUMED;
+    ringleader_promise_set_result_and_free(rl, promise, data);
 }
 
 
@@ -62,30 +60,15 @@ musl_ringleader_init(void)
         return;
     }
 
+
     /* prerequest shmem for paths, stdout, stdin, and stderr */
-    if(ringleader_request_arena_callback(musl_rl, PATH_MAX + SAFE_OFFSET,
-                musl_ringleader_arena_callback, NULL) != ERR_OK)
+    size_t size = (PATH_MAX + SAFE_OFFSET)*8 + (BUFSIZ + UNGET + SAFE_OFFSET)*3;
+    ringleader_promise_t p = ringleader_arena_request(musl_rl, size);
+    if(p == RINGLEADER_PROMISE_INVALID)
     {
-        certikos_printf("Failed to request shmem\n");
+        fprintf(stdenclave, "Failed to prefetch arena\n");
     }
-
-    if(ringleader_request_arena_callback(musl_rl, BUFSIZ + UNGET + SAFE_OFFSET,
-                musl_ringleader_arena_callback, NULL) != ERR_OK)
-    {
-        certikos_printf("Failed to request shmem\n");
-    }
-
-    if(ringleader_request_arena_callback(musl_rl, BUFSIZ + UNGET + SAFE_OFFSET,
-                musl_ringleader_arena_callback, NULL) != ERR_OK)
-    {
-        certikos_printf("Failed to request shmem\n");
-    }
-
-    if(ringleader_request_arena_callback(musl_rl, BUFSIZ + UNGET + SAFE_OFFSET,
-                musl_ringleader_arena_callback, NULL) != ERR_OK)
-    {
-        certikos_printf("Failed to request shmem\n");
-    }
+    ringleader_promise_then(musl_rl, p, musl_ringleader_arena_callback);
 
 
 #ifdef MUSL_RINGLEADER_PROFILE
@@ -168,37 +151,13 @@ musl_ringleader_wait_result(struct ringleader *rl, void * cookie)
 struct ringleader_arena *
 musl_ringleader_get_arena(struct ringleader *rl, size_t size)
 {
-    size += SAFE_OFFSET;
+	ringleader_promise_t promise = ringleader_arena_request(rl, size);
+	if(promise == RINGLEADER_PROMISE_INVALID)
+	{
+		return NULL;
+	}
 
-    /* fast path */
-    struct ringleader_arena * ret = ringleader_get_free_arena(rl, size);
-    if(ret)
-    {
-        return ret;
-    }
-
-    void *cookie = musl_ringleader_cookie();
-    if(ringleader_request_arena(rl, size, cookie) != ERR_OK)
-    {
-        fprintf(stdenclave, "Failed to request arena.\n");
-        return NULL;
-    }
-
-    /* TODO timeout */
-    struct io_uring_cqe *cqe = ringleader_get_cqe(rl);
-    while(cqe->user_data != (uintptr_t)cookie)
-    {
-        ringleader_consume_cqe(rl, cqe);
-        cqe = ringleader_get_cqe(rl);
-    }
-
-    if (ringleader_init_arena(rl, cqe, &ret) != ERR_OK)
-    {
-        fprintf(stdenclave, "Failed to alloc shmem.\n");
-    }
-
-    ringleader_consume_cqe(rl, cqe);
-    return ret;
+	return ringleader_promise_await(rl, promise, NULL);
 }
 
 

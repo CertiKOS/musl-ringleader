@@ -11,13 +11,13 @@ int
 musl_ringleader_close(int fd)
 {
 	struct ringleader* rl = get_ringleader();
-	int id = ringleader_prep_close(rl, fd);
 	if(musl_rl_async_fd_check(fd))
 	{
 		return musl_rl_async_fd_close(rl, fd);
 	}
 	else
 	{
+		int id = ringleader_prep_close(rl, fd);
 		void * cookie = musl_ringleader_set_cookie(rl, id);
 		ringleader_submit(rl);
 		return musl_ringleader_wait_result(rl, cookie);
