@@ -68,7 +68,12 @@ musl_ringleader_init(void)
     {
         fprintf(stdenclave, "Failed to prefetch arena\n");
     }
-    ringleader_promise_then(musl_rl, p, musl_ringleader_arena_callback);
+    ringleader_promise_t p2 =
+        ringleader_promise_then(musl_rl, p, musl_ringleader_arena_callback);
+
+    ringleader_promise_free_on_fulfill(musl_rl, p);
+    ringleader_promise_free_on_fulfill(musl_rl, p2);
+
 
 
 #ifdef MUSL_RINGLEADER_PROFILE

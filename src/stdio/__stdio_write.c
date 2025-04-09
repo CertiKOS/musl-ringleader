@@ -7,11 +7,13 @@
 #include "ringleader.h"
 #include <certikos/debug.h>
 
-
-
-err_t
-rl_stdio_write_done(struct ringleader *rl, struct io_uring_cqe *cqe)
+void
+rl_stdio_write_done(
+		struct ringleader *rl,
+		ringleader_promise_t handle,
+		void *data)
 {
+	struct io_uring_cqe * cqe = (void *)data;
     FILE *f = (void*)cqe->user_data;
 
     struct iovec * iov = f->rl.in_flight_iovs;
@@ -56,7 +58,9 @@ rl_stdio_write_done(struct ringleader *rl, struct io_uring_cqe *cqe)
     memcpy(f->rl.iov_shmem, iov, sizeof(*iov)*iov_count);
 
     uint32_t sqe = ringleader_prep_writev(rl, f->fd, f->rl.iov_shmem, iov_count, -1);
-    ringleader_set_callback(rl, sqe, rl_stdio_write_done, f);
+    ringleader_sqe_set_data(rl, sqe, f);
+    ringleader_promise_t p = ringleader_sqe_then(rl, sqe, rl_stdio_write_done);
+    ringleader_promise_free_on_fulfill(rl, p);
     ringleader_submit(rl);
     goto done;
 
@@ -67,7 +71,7 @@ free_arenas:
     f->rl.in_flight_arenas[1] = NULL;
 done:
     ringleader_consume_cqe(rl, cqe);
-    return ERR_OK_CONSUMED;
+    ringleader_promise_set_result(rl, handle, (void*)(uintptr_t)cqe->res);
 }
 
 #endif
@@ -201,7 +205,9 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
             sizeof(struct iovec)*index);
 
     uint32_t sqe = ringleader_prep_writev(rl, f->fd, f->rl.iov_shmem, index, -1);
-    ringleader_set_callback(rl, sqe, rl_stdio_write_done, f);
+    ringleader_sqe_set_data(rl, sqe, f);
+    ringleader_promise_t p = ringleader_sqe_then(rl, sqe, rl_stdio_write_done);
+    ringleader_promise_free_on_fulfill(rl, p);
     ringleader_submit(rl);
 
     if(f->wpos != f->wbase)

@@ -18,26 +18,31 @@ rl_stdio_wait_pending_read(FILE *f)
     }
 }
 
-
-err_t
-rl_stdio_read_done(struct ringleader *rl, struct io_uring_cqe *cqe)
+void
+rl_stdio_read_done(
+		struct ringleader *rl,
+		ringleader_promise_t handle,
+		void *data)
 {
-    FILE *f = (void*)cqe->user_data;
-    int cnt = cqe->res;
-    ringleader_consume_cqe(rl, cqe);
+	struct io_uring_cqe * cqe =  (void*)data;
+	FILE *f = (void*)cqe->user_data;
+	int cnt = cqe->res;
 
-    f->rl.pending_buf_read = 0;
+	ringleader_consume_cqe(rl, cqe);
+	ringleader_promise_set_result(rl, handle, (void*)(uintptr_t)cnt);
 
-    if (cnt <= 0)
-    {
-        f->flags |= cnt ? F_ERR : F_EOF;
-        return ERR_OK_CONSUMED;
-    }
+	f->rl.pending_buf_read = 0;
 
-    f->rpos = f->buf;
-    f->rend = f->buf + cnt;
-    return ERR_OK_CONSUMED;
+	if (cnt <= 0)
+	{
+		f->flags |= cnt ? F_ERR : F_EOF;
+		return;
+	}
+
+	f->rpos = f->buf;
+	f->rend = f->buf + cnt;
 }
+
 #endif
 
 size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
@@ -83,7 +88,11 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
     }
 
     uint32_t sqe = ringleader_prep_read(rl, f->fd, f->buf, f->buf_size, -1);
-    ringleader_set_callback(rl, sqe, rl_stdio_read_done, f);
+
+    ringleader_sqe_set_data(rl, sqe, f);
+    ringleader_promise_t p = ringleader_sqe_then(rl, sqe, rl_stdio_read_done);
+    ringleader_promise_free_on_fulfill(rl, p);
+
     ringleader_submit(rl);
     f->rl.pending_buf_read = 1;
 

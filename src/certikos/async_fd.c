@@ -101,15 +101,20 @@ musl_rl_async_fd_finish_all(struct ringleader *rl)
 }
 
 
-err_t
+
+
+void
 musl_rl_async_fd_close_done(
 		struct ringleader *rl,
-		struct io_uring_cqe *cqe)
+		ringleader_promise_t promise,
+		void *data)
 {
-	struct musl_rl_async_fd *file = &musl_rl_async_fds[cqe->user_data];
+	struct io_uring_cqe *cqe = data;
+	struct musl_rl_async_fd *file = (void*)cqe->user_data;
+
 	file->file_open = 0;
 	ringleader_consume_cqe(rl, cqe);
-	return ERR_OK_CONSUMED;
+	ringleader_promise_set_result(rl, promise, (void*)(uintptr_t)cqe->res);
 }
 
 
@@ -134,7 +139,12 @@ musl_rl_async_fd_close(
 	if(file->n_writes_pending == 0 && file->n_reads_pending == 0)
 	{
 		int close_sqe = ringleader_prep_close(rl, fd);
-		ringleader_set_callback(rl, close_sqe, musl_rl_async_fd_close_done, (void*)(intptr_t)fd);
+		ringleader_sqe_set_data(rl, close_sqe, (void*)file);
+		ringleader_promise_t promise =
+				ringleader_sqe_then(
+						rl, close_sqe, (void*)musl_rl_async_fd_close_done);
+		ringleader_promise_free_on_fulfill(rl, promise);
+
 		ringleader_submit(rl);
 		return 0;
 	}
