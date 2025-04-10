@@ -23,8 +23,7 @@ int __stdio_close(FILE *f)
 	struct ringleader *rl = get_ringleader();
 	while(f->rl.in_flight_arenas[0] || f->rl.in_flight_arenas[1])
 	{
-		struct io_uring_cqe * cqe = ringleader_peek_cqe(rl);
-		(void)cqe;
+		musl_ringleader_flush_cqes(rl);
 	}
 
 	int32_t id = ringleader_prep_close(rl, f->fd);

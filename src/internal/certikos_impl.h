@@ -15,6 +15,7 @@ struct  ringleader_arena * musl_ringleader_get_arena(
 			struct ringleader * rl,
 			size_t size);
 int     musl_ringleader_wait_result(struct ringleader *rl, void * cookie);
+void    musl_ringleader_flush_cqes(struct ringleader *rl);
 void    musl_ringleader_init(void);
 void *  musl_ringleader_statx_async(
 			struct ringleader *rl,

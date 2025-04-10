@@ -10,12 +10,11 @@
 void
 rl_stdio_wait_pending_read(FILE *f)
 {
-    struct ringleader *rl = get_ringleader();
-    while(f && f->rl.pending_buf_read)
-    {
-        struct io_uring_cqe * cqe = ringleader_peek_cqe(rl);
-        (void)cqe;
-    }
+	struct ringleader *rl = get_ringleader();
+	while(f && f->rl.pending_buf_read)
+	{
+		musl_ringleader_flush_cqes(rl);
+	}
 }
 
 void
@@ -28,7 +27,6 @@ rl_stdio_read_done(
 	FILE *f = (void*)cqe->user_data;
 	int cnt = cqe->res;
 
-	ringleader_consume_cqe(rl, cqe);
 	ringleader_promise_set_result(rl, handle, (void*)(uintptr_t)cnt);
 
 	f->rl.pending_buf_read = 0;

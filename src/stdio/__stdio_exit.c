@@ -14,13 +14,12 @@ static void close_file(FILE *f)
 	FFINALLOCK(f);
 	if (f->wpos != f->wbase) f->write(f, 0, 0);
 #ifdef _CERTIKOS_
-    /* wait for outstanding write to complete */
-    struct ringleader *rl = get_ringleader();
-    while(f->rl.in_flight_arenas[0] || f->rl.in_flight_arenas[1])
-    {
-        struct io_uring_cqe * cqe = ringleader_peek_cqe(rl);
-        (void)cqe;
-    }
+	/* wait for outstanding write to complete */
+	struct ringleader *rl = get_ringleader();
+	while(f->rl.in_flight_arenas[0] || f->rl.in_flight_arenas[1])
+	{
+		musl_ringleader_flush_cqes(rl);
+	}
 #endif
 	if (f->rpos != f->rend) f->seek(f, f->rpos-f->rend, SEEK_CUR);
 }

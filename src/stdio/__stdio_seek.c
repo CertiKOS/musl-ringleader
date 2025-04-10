@@ -16,8 +16,7 @@ off_t __stdio_seek(FILE *f, off_t off, int whence)
     /* wait for outstanding write to complete */
     while(f->rl.in_flight_arenas[0] || f->rl.in_flight_arenas[1])
     {
-        struct io_uring_cqe * cqe = ringleader_peek_cqe(rl);
-        (void)cqe;
+        musl_ringleader_flush_cqes(rl);
     }
 #endif
 	return __lseek(f->fd, off, whence);

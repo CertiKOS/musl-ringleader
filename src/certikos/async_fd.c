@@ -95,7 +95,8 @@ musl_rl_async_fd_finish_all(struct ringleader *rl)
 		while(musl_rl_async_fds[i].file_open)
 		{
 			/* Ignore any cookies since this should be called at exit time */
-			(void) ringleader_peek_cqe(rl);
+			struct io_uring_cqe cqe;
+			(void) ringleader_peek_cqe(rl, &cqe);
 		}
 	}
 }
@@ -113,7 +114,6 @@ musl_rl_async_fd_close_done(
 	struct musl_rl_async_fd *file = (void*)cqe->user_data;
 
 	file->file_open = 0;
-	ringleader_consume_cqe(rl, cqe);
 	ringleader_promise_set_result(rl, promise, (void*)(uintptr_t)cqe->res);
 }
 
@@ -185,9 +185,29 @@ musl_rl_async_pwrite_done(
 	}
 
 done:
-	ringleader_promise_set_result_and_free(rl, promise, (void*)(uintptr_t)cqe->res);
+	ringleader_promise_set_result(rl, promise, (void*)(uintptr_t)cqe->res);
 	ringleader_arena_free(rl, ctx->arena);
-	ringleader_consume_cqe(rl, cqe);
+}
+
+
+
+void
+musl_rl_async_pwrite_ready(
+		struct ringleader *rl,
+		ringleader_promise_t p_ready,
+		void *data)
+{
+	uint32_t sqe_id = (uint32_t)(uintptr_t)data;
+
+	ringleader_promise_t p_done = ringleader_sqe_then(rl, sqe_id,
+			(void*)musl_rl_async_pwrite_done);
+
+	ringleader_promise_dup_ctx(rl, p_done, p_ready,
+			struct musl_rl_async_pwrite_ctx);
+
+	ringleader_submit(rl);
+	ringleader_promise_free_on_fulfill(rl, p_done);
+	ringleader_promise_set_result(rl, p_ready, NULL);
 }
 
 
@@ -206,22 +226,21 @@ musl_rl_async_pwrite(
 
 	off_t final_offset = (offset < 0) ? musl_rl_async_fds[fd].offset : offset;
 
-	int id = ringleader_prep_write(rl, fd, shmem, count, final_offset);
+	ringleader_promise_t p1 = ringleader_sqe_alloc(
+			rl, fd, IORING_OP_WRITE_FIXED, shmem, count, final_offset);
 
-	ringleader_promise_t promise = ringleader_sqe_then(rl, id,
-			(void*)musl_rl_async_pwrite_done);
-	if(promise == RINGLEADER_PROMISE_INVALID)
-	{
-		return 0;
-	}
+	ringleader_promise_t p2 = ringleader_promise_chain(rl, p1);
 
 	struct musl_rl_async_pwrite_ctx *ctx =
-		ringleader_promise_get_ctx_fast(rl, promise,
+		ringleader_promise_get_ctx_fast(rl, p2,
 				struct musl_rl_async_pwrite_ctx);
 	ctx->arena = arena;
 	ctx->fd = fd;
 
-	ringleader_submit(rl);
+	ringleader_promise_then(rl, p2, musl_rl_async_pwrite_ready);
+	ringleader_promise_free_on_fulfill(rl, p1);
+	ringleader_promise_free_on_fulfill(rl, p2);
+
 
 	musl_rl_async_fds[fd].n_writes_pending++;
 

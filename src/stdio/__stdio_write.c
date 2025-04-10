@@ -70,7 +70,6 @@ free_arenas:
     f->rl.in_flight_arenas[0] = NULL;
     f->rl.in_flight_arenas[1] = NULL;
 done:
-    ringleader_consume_cqe(rl, cqe);
     ringleader_promise_set_result(rl, handle, (void*)(uintptr_t)cqe->res);
 }
 
@@ -163,8 +162,7 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
     /* wait for current to finish */
     while(f->rl.in_flight_arenas[0] || f->rl.in_flight_arenas[1])
     {
-        struct io_uring_cqe * cqe = ringleader_peek_cqe(rl);
-        (void)cqe;
+        musl_ringleader_flush_cqes(rl);
 
         if((f->rl.in_flight_arenas[0] || f->rl.in_flight_arenas[1]) &&
                 (f->wpos != f->wbase) && !new_stdio_arena)

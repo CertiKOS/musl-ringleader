@@ -13,7 +13,8 @@ _Noreturn void _Exit(int ec)
 	musl_rl_async_fd_finish_all(rl);
 	struct ringleader_arena * arena = musl_ringleader_get_arena(rl, 0x1000);
 	ringleader_exit_proxy(rl, ec, ringleader_arena_push(arena, 0x1000));
-	ringleader_consume_cqe(rl, ringleader_get_cqe(rl));
+	struct io_uring_cqe cqe;
+	(void) ringleader_get_cqe(rl, &cqe);
 	ringleader_free_arena(rl, arena);
 	#endif
 	__syscall(SYS_exit_group, ec);

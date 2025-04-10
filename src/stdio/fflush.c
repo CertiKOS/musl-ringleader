@@ -46,8 +46,7 @@ int fflush(FILE *f)
     /* wait for outstanding write to complete */
     while(f->rl.in_flight_arenas[0] || f->rl.in_flight_arenas[1])
     {
-        struct io_uring_cqe * cqe = ringleader_peek_cqe(rl);
-        (void)cqe;
+        musl_ringleader_flush_cqes(rl);
     }
 #endif
 
