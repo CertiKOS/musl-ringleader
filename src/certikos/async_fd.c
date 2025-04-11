@@ -67,12 +67,13 @@ musl_rl_async_fd_init(
 		file->offset = file_size;
 	}
 
-	/* shmem is io_uring registered, so we can use O_DIRECT */
-	if(!(file->flags & O_DIRECT))
-	{
-		//TODO async
-		fcntl(fd, F_SETFL, O_DIRECT);
-	}
+	// Seems to cause a bug in Linux kernel
+	///* shmem is io_uring registered, so we can use O_DIRECT */
+	//if(!(file->flags & O_DIRECT))
+	//{
+	//	//TODO async
+	//	fcntl(fd, F_SETFL, O_DIRECT);
+	//}
 }
 
 bool
@@ -143,6 +144,7 @@ musl_rl_async_pwrite_done(
 		(void) musl_rl_async_fd_close(rl, ctx->fd);
 	}
 
+
 done:
 	ringleader_promise_set_result(rl, promise, (void*)(uintptr_t)cqe->res);
 	ringleader_arena_free(rl, ctx->arena);
@@ -206,7 +208,6 @@ musl_rl_async_dispatch_block(
 	file->current_block = ringleader_arena_push(
 			file->current_block_arena, count);
 	file->current_block_offset = 0;
-
 }
 
 
