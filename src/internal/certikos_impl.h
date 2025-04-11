@@ -44,6 +44,7 @@ ssize_t musl_rl_async_pwrite(
 			size_t count,
 			off_t offset);
 off_t   musl_rl_async_fd_lseek(
+			struct ringleader *rl,
 			int fd,
 			off_t offset,
 			int whence);

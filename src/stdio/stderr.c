@@ -2,7 +2,6 @@
 
 #undef stderr
 
-//REMOVE CARVEOUT AND PUT UNGET INTO SHMEM
 static unsigned char buf[UNGET];
 
 hidden FILE __stderr_FILE = {

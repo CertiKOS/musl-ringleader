@@ -12,7 +12,7 @@ off_t musl_ringleader_lseek(int fd, off_t offset, int whence)
 
 	if(musl_rl_async_fd_check(fd))
 	{
-		return musl_rl_async_fd_lseek(fd, offset, whence);
+		return musl_rl_async_fd_lseek(rl, fd, offset, whence);
 	}
 
 	int32_t id = ringleader_prep_lseek(rl, fd, offset, whence);

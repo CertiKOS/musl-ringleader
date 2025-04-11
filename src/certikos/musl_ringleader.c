@@ -60,10 +60,8 @@ musl_ringleader_init(void)
         return;
     }
 
-
-    /* prerequest shmem for paths, stdout, stdin, and stderr */
-    //size_t size = (PATH_MAX + SAFE_OFFSET)*8 + (BUFSIZ + UNGET + SAFE_OFFSET)*3;
-    size_t size = 1024*1024; /* 1MB shmem request */
+    /* prefetch */
+    size_t size = 1024*1024;
     ringleader_promise_t p = ringleader_arena_request(musl_rl, size);
     if(p == RINGLEADER_PROMISE_INVALID)
     {

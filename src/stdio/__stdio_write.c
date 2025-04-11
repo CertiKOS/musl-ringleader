@@ -134,6 +134,7 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
     {
         /* first stdout, and handling for all stderr prints */
         /* copy current buffer into new shmem buffer */
+
         intptr_t diff = (intptr_t)f->buf;
         f->buf = ringleader_arena_apush(f->rl.buf_arena, f->buf, f->buf_size);
         diff = (intptr_t)f->buf - diff;
@@ -142,13 +143,11 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
         f->wend += diff;
     }
 
-    //fprintf(stdenclave, "rl_stdio_write: %p %zu %zu\n", f, f->wpos - f->wbase, len);
-
 
     /* get arena for io_vecs and buffer */
     struct ringleader_arena * new_arena = musl_ringleader_get_arena(
         rl,
-        len + sizeof(struct iovec)*2);
+        ROUND_UP(len,8) + sizeof(struct iovec)*2);
 
     void * new_shmem = NULL;
     if(buf != NULL && len > 0)
@@ -214,9 +213,15 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
         f->rl.buf_arena = (new_stdio_arena) ? new_stdio_arena :
             musl_ringleader_get_arena(rl, BUFSIZ + UNGET);
         ringleader_arena_push(f->rl.buf_arena, UNGET);
-        f->buf = ringleader_arena_push(f->rl.buf_arena, BUFSIZ);
-        f->wend = f->buf + f->buf_size;
-        f->wpos = f->wbase = f->buf;
+
+        /* for stdout, we need to push the buffer */
+        if(f->buf_size == BUFSIZ)
+        {
+            f->buf = ringleader_arena_push(f->rl.buf_arena, BUFSIZ);
+            f->wend = f->buf + f->buf_size;
+            f->wpos = f->wbase = f->buf;
+        }
+        /* for stderr, the caller overwrites f->buf, f->w... etc */
     }
 
 

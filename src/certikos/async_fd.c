@@ -184,8 +184,10 @@ musl_rl_async_dispatch_block(
 		return;
 	}
 
+	off_t offset = file->offset - file->current_block_offset;
+
 	ringleader_promise_t p1 = ringleader_sqe_alloc(
-			rl, fd, IORING_OP_WRITE_FIXED, shmem, count, file->offset);
+			rl, fd, IORING_OP_WRITE_FIXED, shmem, count, offset);
 
 	ringleader_promise_t p2 = ringleader_promise_chain(rl, p1);
 
@@ -198,13 +200,13 @@ musl_rl_async_dispatch_block(
 	ringleader_promise_then(rl, p2, musl_rl_async_pwrite_ready);
 	ringleader_promise_free_on_fulfill(rl, p1);
 	ringleader_promise_free_on_fulfill(rl, p2);
+	musl_rl_async_fds[fd].n_writes_pending++;
 
 	file->current_block_arena = musl_ringleader_get_arena(rl, count);
 	file->current_block = ringleader_arena_push(
 			file->current_block_arena, count);
 	file->current_block_offset = 0;
 
-	musl_rl_async_fds[fd].n_writes_pending++;
 }
 
 
@@ -234,7 +236,7 @@ musl_rl_async_pwrite(
 	}
 	else
 	{
-		size_t n_blocks = count / file->block_size;
+		size_t n_blocks = (count + file->block_size - 1) / file->block_size;
 
 		size_t rem = count;
 		for(size_t i = 0; i < n_blocks; i++)
@@ -257,39 +259,13 @@ musl_rl_async_pwrite(
 		}
 	}
 
-//	ringleader_promise_t p1 = ringleader_sqe_alloc(
-//			rl, fd, IORING_OP_WRITE_FIXED, shmem, count, final_offset);
-//
-//	ringleader_promise_t p2 = ringleader_promise_chain(rl, p1);
-//
-//	struct musl_rl_async_pwrite_ctx *ctx =
-//		ringleader_promise_get_ctx_fast(rl, p2,
-//				struct musl_rl_async_pwrite_ctx);
-//	ctx->arena = arena;
-//	ctx->fd = fd;
-//
-//	ringleader_promise_then(rl, p2, musl_rl_async_pwrite_ready);
-//	ringleader_promise_free_on_fulfill(rl, p1);
-//	ringleader_promise_free_on_fulfill(rl, p2);
-//
-//
-//	musl_rl_async_fds[fd].n_writes_pending++;
-//
-//	//TODO overflow
-//	musl_rl_async_fds[fd].file_size =
-//		MAX(musl_rl_async_fds[fd].file_size, final_offset + count);
-//
-//	if(offset < 0)
-//	{
-//		musl_rl_async_fds[fd].offset += count;
-//	}
-
 	return count;
 }
 
 
 off_t
 musl_rl_async_fd_lseek(
+		struct ringleader *rl,
 		int fd,
 		off_t offset,
 		int whence)
@@ -298,21 +274,29 @@ musl_rl_async_fd_lseek(
 	switch(whence)
 	{
 		case SEEK_SET:
+			if(offset != file->offset)
+			{
+				musl_rl_async_dispatch_block(rl, fd);
+			}
 			file->offset = offset;
 			break;
 		case SEEK_CUR:
-			//TODO overflow
+			if(offset != 0)
+			{
+				musl_rl_async_dispatch_block(rl, fd);
+			}
 			file->offset += offset;
 			break;
 		case SEEK_END:
-			//TODO IMPLEMENT
-			fprintf(stdenclave, "musl_rl_async_fd_lseek: SEEK_END not implemented\n");
-			exit(1);
+			if(offset != 0)
+			{
+				musl_rl_async_dispatch_block(rl, fd);
+			}
+			file->offset = file->file_size + offset;
 			break;
 #ifdef SEEK_DATA
 		case SEEK_DATA:
 		case SEEK_HOLE:
-			//TODO IMPLEMENT
 			fprintf(stdenclave, "musl_rl_async_fd_lseek: SEEK_DATA/SEEK_HOLE not implemented\n");
 			exit(1);
 			break;
@@ -320,6 +304,8 @@ musl_rl_async_fd_lseek(
 		default:
 			return -1;
 	}
+
+
 
 	//TODO do we need to sync the OS?
 	return file->offset;
