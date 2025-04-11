@@ -16,10 +16,13 @@ struct musl_rl_async_fd
 	mode_t mode;
 	size_t block_size;
 	size_t file_size;
+
 	size_t n_writes_pending;
-
-
 	size_t n_reads_pending;
+
+	struct ringleader_arena *current_block_arena;
+	void * current_block;
+	size_t current_block_offset;
 
 	int errcode;
 	int file_open : 1;
@@ -54,6 +57,10 @@ musl_rl_async_fd_init(
 	file->file_open = 1;
 	file->do_close = 0;
 	file->file_size = file_size;
+
+	file->current_block_arena = NULL;
+	file->current_block = NULL;
+	file->current_block_offset = 0;
 
 	if(file->flags & O_APPEND)
 	{
@@ -104,54 +111,6 @@ musl_rl_async_fd_finish_all(struct ringleader *rl)
 
 
 
-void
-musl_rl_async_fd_close_done(
-		struct ringleader *rl,
-		ringleader_promise_t promise,
-		void *data)
-{
-	struct io_uring_cqe *cqe = data;
-	struct musl_rl_async_fd *file = (void*)cqe->user_data;
-
-	file->file_open = 0;
-	ringleader_promise_set_result(rl, promise, (void*)(uintptr_t)cqe->res);
-}
-
-
-int
-musl_rl_async_fd_close(
-		struct ringleader *rl,
-		int fd)
-{
-	if(!musl_rl_async_fd_check(fd))
-	{
-		fprintf(stdenclave, "musl_rl_async_fd_close: file not async\n");
-		return -1;
-	}
-
-	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
-	if(!file->file_open)
-	{
-		fprintf(stdenclave, "musl_rl_async_fd_close: file not open\n");
-		return -1;
-	}
-
-	if(file->n_writes_pending == 0 && file->n_reads_pending == 0)
-	{
-		int close_sqe = ringleader_prep_close(rl, fd);
-		ringleader_sqe_set_data(rl, close_sqe, (void*)file);
-		ringleader_promise_t promise =
-				ringleader_sqe_then(
-						rl, close_sqe, (void*)musl_rl_async_fd_close_done);
-		ringleader_promise_free_on_fulfill(rl, promise);
-
-		ringleader_submit(rl);
-		return 0;
-	}
-
-	file->do_close = 1;
-	return 0;
-}
 
 void
 musl_rl_async_pwrite_done(
@@ -210,24 +169,23 @@ musl_rl_async_pwrite_ready(
 	ringleader_promise_set_result(rl, p_ready, NULL);
 }
 
-
-ssize_t
-musl_rl_async_pwrite(
+void
+musl_rl_async_dispatch_block(
 		struct ringleader *rl,
-		struct ringleader_arena *arena,
-		int fd,
-		const void *buf,
-		size_t count,
-		off_t offset)
+		int fd)
 {
-	void *shmem = ringleader_arena_apush(arena, buf, count);
-	if(!shmem)
-		return 0;
+	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
+	struct ringleader_arena *arena = file->current_block_arena;
+	void *shmem = file->current_block;
+	size_t count = file->current_block_offset;
 
-	off_t final_offset = (offset < 0) ? musl_rl_async_fds[fd].offset : offset;
+	if(count == 0)
+	{
+		return;
+	}
 
 	ringleader_promise_t p1 = ringleader_sqe_alloc(
-			rl, fd, IORING_OP_WRITE_FIXED, shmem, count, final_offset);
+			rl, fd, IORING_OP_WRITE_FIXED, shmem, count, file->offset);
 
 	ringleader_promise_t p2 = ringleader_promise_chain(rl, p1);
 
@@ -241,17 +199,90 @@ musl_rl_async_pwrite(
 	ringleader_promise_free_on_fulfill(rl, p1);
 	ringleader_promise_free_on_fulfill(rl, p2);
 
+	file->current_block_arena = musl_ringleader_get_arena(rl, count);
+	file->current_block = ringleader_arena_push(
+			file->current_block_arena, count);
+	file->current_block_offset = 0;
 
 	musl_rl_async_fds[fd].n_writes_pending++;
+}
 
-	//TODO overflow
-	musl_rl_async_fds[fd].file_size =
-		MAX(musl_rl_async_fds[fd].file_size, final_offset + count);
 
-	if(offset < 0)
+
+ssize_t
+musl_rl_async_pwrite(
+		struct ringleader *rl,
+		int fd,
+		const void *buf,
+		size_t count,
+		off_t offset)
+{
+	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
+
+	if(!file->current_block_arena)
 	{
-		musl_rl_async_fds[fd].offset += count;
+		file->current_block_arena = musl_ringleader_get_arena(rl, count);
+		file->current_block = ringleader_arena_push(
+				file->current_block_arena, count);
+		file->current_block_offset = 0;
 	}
+
+	if(offset != -1 && offset != file->offset)
+	{
+		fprintf(stdenclave, "musl_rl_async_pwrite: offset not supported\n");
+		return 0;
+	}
+	else
+	{
+		size_t n_blocks = count / file->block_size;
+
+		size_t rem = count;
+		for(size_t i = 0; i < n_blocks; i++)
+		{
+			size_t blk_rem = file->block_size - file->current_block_offset;
+			size_t cpy_size = MIN(blk_rem, rem);
+
+			memcpy((char*)file->current_block + file->current_block_offset,
+					(const char *)buf + (i * file->block_size),
+					cpy_size);
+
+			file->current_block_offset += cpy_size;
+			file->offset += cpy_size;
+			file->file_size = MAX(file->file_size, file->offset);
+
+			if(file->current_block_offset == file->block_size)
+			{
+				musl_rl_async_dispatch_block(rl, fd);
+			}
+		}
+	}
+
+//	ringleader_promise_t p1 = ringleader_sqe_alloc(
+//			rl, fd, IORING_OP_WRITE_FIXED, shmem, count, final_offset);
+//
+//	ringleader_promise_t p2 = ringleader_promise_chain(rl, p1);
+//
+//	struct musl_rl_async_pwrite_ctx *ctx =
+//		ringleader_promise_get_ctx_fast(rl, p2,
+//				struct musl_rl_async_pwrite_ctx);
+//	ctx->arena = arena;
+//	ctx->fd = fd;
+//
+//	ringleader_promise_then(rl, p2, musl_rl_async_pwrite_ready);
+//	ringleader_promise_free_on_fulfill(rl, p1);
+//	ringleader_promise_free_on_fulfill(rl, p2);
+//
+//
+//	musl_rl_async_fds[fd].n_writes_pending++;
+//
+//	//TODO overflow
+//	musl_rl_async_fds[fd].file_size =
+//		MAX(musl_rl_async_fds[fd].file_size, final_offset + count);
+//
+//	if(offset < 0)
+//	{
+//		musl_rl_async_fds[fd].offset += count;
+//	}
 
 	return count;
 }
@@ -292,4 +323,56 @@ musl_rl_async_fd_lseek(
 
 	//TODO do we need to sync the OS?
 	return file->offset;
+}
+
+
+void
+musl_rl_async_fd_close_done(
+		struct ringleader *rl,
+		ringleader_promise_t promise,
+		void *data)
+{
+	struct io_uring_cqe *cqe = data;
+	struct musl_rl_async_fd *file = (void*)cqe->user_data;
+
+	file->file_open = 0;
+	ringleader_promise_set_result(rl, promise, (void*)(uintptr_t)cqe->res);
+}
+
+
+int
+musl_rl_async_fd_close(
+		struct ringleader *rl,
+		int fd)
+{
+	if(!musl_rl_async_fd_check(fd))
+	{
+		fprintf(stdenclave, "musl_rl_async_fd_close: file not async\n");
+		return -1;
+	}
+
+	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
+	if(!file->file_open)
+	{
+		fprintf(stdenclave, "musl_rl_async_fd_close: file not open\n");
+		return -1;
+	}
+
+	musl_rl_async_dispatch_block(rl, fd);
+
+	if(file->n_writes_pending == 0 && file->n_reads_pending == 0)
+	{
+		int close_sqe = ringleader_prep_close(rl, fd);
+		ringleader_sqe_set_data(rl, close_sqe, (void*)file);
+		ringleader_promise_t promise =
+				ringleader_sqe_then(
+						rl, close_sqe, (void*)musl_rl_async_fd_close_done);
+		ringleader_promise_free_on_fulfill(rl, promise);
+
+		ringleader_submit(rl);
+		return 0;
+	}
+
+	file->do_close = 1;
+	return 0;
 }

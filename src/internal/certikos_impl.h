@@ -39,7 +39,6 @@ int     musl_rl_async_fd_close(
 			int fd);
 ssize_t musl_rl_async_pwrite(
 			struct ringleader *rl,
-			struct ringleader_arena *arena,
 			int fd,
 			const void *buf,
 			size_t count,

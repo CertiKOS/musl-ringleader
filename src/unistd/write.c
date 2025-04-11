@@ -12,23 +12,16 @@ ssize_t musl_ringleader_write(int fd, const void *buf, size_t count)
 {
 	int ret;
 	struct ringleader *rl = get_ringleader();
+
+	if(musl_rl_async_fd_check(fd))
+	{
+		return musl_rl_async_pwrite(rl, fd, buf, count, -1);
+	}
+
 	struct ringleader_arena *arena =
 		musl_ringleader_get_arena(rl, count);
 	if(!arena)
 		return -ENOMEM;
-
-	if(musl_rl_async_fd_check(fd))
-	{
-		//TODO cache instead of waiting for arena above
-		//TODO check status of older writes
-		ret = musl_rl_async_pwrite(rl, arena, fd, buf, count, -1);
-		if(ret != count)
-		{
-			ringleader_free_arena(rl, arena);
-		}
-		return ret;
-	}
-
 
 	void *shmem = ringleader_arena_apush(arena, buf, count);
 	if(!shmem)
@@ -48,5 +41,9 @@ ssize_t musl_ringleader_write(int fd, const void *buf, size_t count)
 
 ssize_t write(int fd, const void *buf, size_t count)
 {
+#ifdef _CERTIKOS_
+	return __syscall_ret(musl_ringleader_write(fd, buf, count));
+#else
 	return syscall_cp(SYS_write, fd, buf, count);
+#endif
 }

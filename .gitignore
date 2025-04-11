@@ -8,6 +8,7 @@ lib/musl-gcc.specs
 /obj/
 
 /include/ringleader.h
+/include/buddy_alloc.h
 /include/ringleader
 /include/certikos
 /src/ringleader
