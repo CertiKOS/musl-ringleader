@@ -1,7 +1,8 @@
 #include "certikos_impl.h"
-#include "ringleader.h"
 #include <certikos/macros.h>
 #include <string.h>
+#include <ringleader.h>
+#include <ringleader/reader.h>
 
 struct musl_rl_async_pwrite_ctx
 {
@@ -23,6 +24,8 @@ struct musl_rl_async_fd
 	struct ringleader_arena *current_block_arena;
 	void * current_block;
 	size_t current_block_offset;
+
+	struct ringleader_reader *reader;
 
 	int errcode;
 	int file_open : 1;
@@ -46,6 +49,8 @@ musl_rl_async_fd_init(
 		return;
 	}
 
+	struct ringleader *rl = get_ringleader();
+
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
 	file->offset = 0;
 	file->flags = flags;
@@ -67,13 +72,17 @@ musl_rl_async_fd_init(
 		file->offset = file_size;
 	}
 
-	// Seems to cause a bug in Linux kernel
-	///* shmem is io_uring registered, so we can use O_DIRECT */
-	//if(!(file->flags & O_DIRECT))
-	//{
-	//	//TODO async
-	//	fcntl(fd, F_SETFL, O_DIRECT);
-	//}
+	if(flags & O_RDONLY || flags & O_RDWR)
+	{
+		struct ringleader_arena * arena = musl_ringleader_get_arena(
+				rl, NEXT_POW2(block_size) * 16);
+		file->reader = ringleader_reader_factory(
+				rl,
+				arena,
+				fd,
+				0,
+				file_size);
+	}
 }
 
 bool
@@ -160,6 +169,8 @@ musl_rl_async_pwrite_ready(
 {
 	uint32_t sqe_id = (uint32_t)(uintptr_t)data;
 
+	ringleader_sqe_set_flags(rl, sqe_id, IOSQE_ASYNC);
+
 	ringleader_promise_t p_done = ringleader_sqe_then(rl, sqe_id,
 			(void*)musl_rl_async_pwrite_done);
 
@@ -174,7 +185,8 @@ musl_rl_async_pwrite_ready(
 void
 musl_rl_async_dispatch_block(
 		struct ringleader *rl,
-		int fd)
+		int fd,
+		size_t new_block_size)
 {
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
 	struct ringleader_arena *arena = file->current_block_arena;
@@ -204,10 +216,19 @@ musl_rl_async_dispatch_block(
 	ringleader_promise_free_on_fulfill(rl, p2);
 	musl_rl_async_fds[fd].n_writes_pending++;
 
-	file->current_block_arena = musl_ringleader_get_arena(rl, count);
-	file->current_block = ringleader_arena_push(
-			file->current_block_arena, count);
 	file->current_block_offset = 0;
+
+	if(new_block_size == 0)
+	{
+		file->current_block_arena = NULL;
+		file->current_block = NULL;
+		return;
+	}
+
+	file->current_block_arena = musl_ringleader_get_arena(rl, new_block_size);
+	file->current_block = ringleader_arena_push(
+		file->current_block_arena, new_block_size);
+	file->block_size = new_block_size;
 }
 
 
@@ -237,27 +258,43 @@ musl_rl_async_pwrite(
 	}
 	else
 	{
-		size_t n_blocks = (count + file->block_size - 1) / file->block_size;
-
 		size_t rem = count;
-		for(size_t i = 0; i < n_blocks; i++)
+		size_t blk_rem = file->block_size - file->current_block_offset;
+		size_t cpy_size = MIN(blk_rem, rem);
+
+		memcpy((char*)file->current_block + file->current_block_offset,
+				buf,
+				cpy_size);
+
+		file->current_block_offset += cpy_size;
+		file->offset += cpy_size;
+		rem -= cpy_size;
+
+		if(file->current_block_offset == file->block_size)
 		{
-			size_t blk_rem = file->block_size - file->current_block_offset;
-			size_t cpy_size = MIN(blk_rem, rem);
+			size_t new_block_size = file->block_size;
 
-			memcpy((char*)file->current_block + file->current_block_offset,
-					(const char *)buf + (i * file->block_size),
-					cpy_size);
-
-			file->current_block_offset += cpy_size;
-			file->offset += cpy_size;
-			file->file_size = MAX(file->file_size, file->offset);
-
-			if(file->current_block_offset == file->block_size)
+			/* Scale our block size up to allow for at least 16 copies */
+			while(new_block_size < count * 16)
 			{
-				musl_rl_async_dispatch_block(rl, fd);
+				//TODO no overflow check
+				new_block_size *= 2;
+			}
+
+			musl_rl_async_dispatch_block(rl, fd,
+					new_block_size);
+
+			if(rem)
+			{
+				memcpy((char*)file->current_block,
+						(const char *)buf + cpy_size,
+						rem);
+				file->current_block_offset = rem;
+				file->offset += rem;
 			}
 		}
+
+		file->file_size = MAX(file->file_size, file->offset);
 	}
 
 	return count;
@@ -272,26 +309,53 @@ musl_rl_async_fd_lseek(
 		int whence)
 {
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
+
 	switch(whence)
 	{
 		case SEEK_SET:
 			if(offset != file->offset)
 			{
-				musl_rl_async_dispatch_block(rl, fd);
+				musl_rl_async_dispatch_block(rl, fd, file->block_size);
+
+				file->offset = offset;
+				if(file->reader)
+				{
+					ringleader_reader_reset(
+							rl,
+							file->reader,
+							file->file_size,
+							offset);
+				}
 			}
-			file->offset = offset;
 			break;
 		case SEEK_CUR:
 			if(offset != 0)
 			{
-				musl_rl_async_dispatch_block(rl, fd);
+				musl_rl_async_dispatch_block(rl, fd, file->block_size);
+
+				file->offset += offset;
+				if(file->reader)
+				{
+					ringleader_reader_reset(
+							rl,
+							file->reader,
+							file->file_size,
+							file->offset);
+				}
 			}
-			file->offset += offset;
 			break;
 		case SEEK_END:
 			if(offset != 0)
 			{
-				musl_rl_async_dispatch_block(rl, fd);
+				musl_rl_async_dispatch_block(rl, fd, file->block_size);
+				if(file->reader)
+				{
+					ringleader_reader_reset(
+							rl,
+							file->reader,
+							file->file_size,
+							file->offset + file->file_size + offset);
+				}
 			}
 			file->offset = file->file_size + offset;
 			break;
@@ -345,7 +409,7 @@ musl_rl_async_fd_close(
 		return -1;
 	}
 
-	musl_rl_async_dispatch_block(rl, fd);
+	musl_rl_async_dispatch_block(rl, fd, 0);
 
 	if(file->n_writes_pending == 0 && file->n_reads_pending == 0)
 	{
@@ -362,4 +426,38 @@ musl_rl_async_fd_close(
 
 	file->do_close = 1;
 	return 0;
+}
+
+
+
+ssize_t
+musl_rl_async_fd_read(
+		struct ringleader *rl,
+		int fd,
+		void *buf,
+		size_t count)
+{
+	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
+
+	/* if have been writing, flush writes first */
+	if(file->n_writes_pending > 0)
+	{
+		musl_rl_async_dispatch_block(rl, fd, 0);
+	}
+
+	/* don't read until writes are all done */
+	while(file->n_writes_pending > 0)
+	{
+		musl_ringleader_flush_cqes(rl);
+	}
+
+
+	ringleader_promise_t p_read = ringleader_reader_read(
+			rl,
+			file->reader,
+			buf,
+			count);
+
+	file->offset = file->reader->file.off;
+	return (intptr_t)ringleader_promise_await(rl, p_read, NULL);
 }

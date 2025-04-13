@@ -48,6 +48,11 @@ off_t   musl_rl_async_fd_lseek(
 			int fd,
 			off_t offset,
 			int whence);
+ssize_t musl_rl_async_fd_read(
+			struct ringleader *rl,
+			int fd,
+			void *buf,
+			size_t count);
 
 
 

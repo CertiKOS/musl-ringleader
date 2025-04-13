@@ -12,6 +12,11 @@ ssize_t musl_ringleader_read(int fd, void *buf, size_t count)
 {
 	struct ringleader *rl = get_ringleader();
 
+	if(musl_rl_async_fd_check(fd))
+	{
+		return musl_rl_async_fd_read(rl, fd, buf, count);
+	}
+
 	struct ringleader_arena *arena =
 		musl_ringleader_get_arena(rl, count);
 	if(!arena)
@@ -43,5 +48,9 @@ ssize_t musl_ringleader_read(int fd, void *buf, size_t count)
 
 ssize_t read(int fd, void *buf, size_t count)
 {
+#ifdef _CERTIKOS_
+	return __syscall_ret(musl_ringleader_read(fd, buf, count));
+#else
 	return syscall_cp(SYS_read, fd, buf, count);
+#endif
 }
