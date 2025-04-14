@@ -11,9 +11,10 @@ int
 musl_ringleader_close(int fd)
 {
 	struct ringleader* rl = get_ringleader();
-	if(musl_rl_async_fd_check(fd))
+
+	if(musl_rl_async_fd_close(rl, fd) == 0)
 	{
-		return musl_rl_async_fd_close(rl, fd);
+		return 0;
 	}
 	else
 	{

@@ -1,8 +1,87 @@
+#define _GNU_SOURCE
 #include "certikos_impl.h"
 #include <certikos/macros.h>
 #include <string.h>
 #include <ringleader.h>
 #include <ringleader/reader.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+
+#ifndef STATX_TYPE
+//TODO toolchain must include our built linux's headers
+#define STATX_TYPE		0x00000001U	/* Want/got stx_mode & S_IFMT */
+#define STATX_MODE		0x00000002U	/* Want/got stx_mode & ~S_IFMT */
+#define STATX_NLINK		0x00000004U	/* Want/got stx_nlink */
+#define STATX_UID		0x00000008U	/* Want/got stx_uid */
+#define STATX_GID		0x00000010U	/* Want/got stx_gid */
+#define STATX_ATIME		0x00000020U	/* Want/got stx_atime */
+#define STATX_MTIME		0x00000040U	/* Want/got stx_mtime */
+#define STATX_CTIME		0x00000080U	/* Want/got stx_ctime */
+#define STATX_INO		0x00000100U	/* Want/got stx_ino */
+#define STATX_SIZE		0x00000200U	/* Want/got stx_size */
+#define STATX_BLOCKS		0x00000400U	/* Want/got stx_blocks */
+#define STATX_BASIC_STATS	0x000007ffU	/* The stuff in the normal stat struct */
+#define STATX_BTIME		0x00000800U	/* Want/got stx_btime */
+#define STATX_MNT_ID		0x00001000U	/* Got stx_mnt_id */
+#define STATX_DIOALIGN		0x00002000U	/* Want/got direct I/O alignment info */
+
+#define STATX__RESERVED		0x80000000U	/* Reserved for future struct statx expansion */
+struct statx {
+	uint32_t stx_mask;
+	uint32_t stx_blksize;
+	uint64_t stx_attributes;
+	uint32_t stx_nlink;
+	uint32_t stx_uid;
+	uint32_t stx_gid;
+	uint16_t stx_mode;
+	uint16_t pad1;
+	uint64_t stx_ino;
+uint64_t stx_size;
+	uint64_t stx_blocks;
+	uint64_t stx_attributes_mask;
+	struct {
+		int64_t tv_sec;
+		uint32_t tv_nsec;
+		int32_t pad;
+	} stx_atime, stx_btime, stx_ctime, stx_mtime;
+	uint32_t stx_rdev_major;
+	uint32_t stx_rdev_minor;
+	uint32_t stx_dev_major;
+	uint32_t stx_dev_minor;
+	uint64_t spare[14];
+};
+#endif /* STATX_TYPE (no statx defs) */
+
+
+/* optimize regular file, pipe, socket writes/reads by asynchronous IO */
+struct musl_rl_async_fd
+{
+	struct
+	{
+		size_t file_size;
+		ssize_t offset;
+	}; /* file */
+
+	ringleader_promise_t p_fstat;
+
+	int errcode;
+	unsigned int file_open : 1;
+	unsigned int statx_done : 1;
+	unsigned int is_async : 1;
+	unsigned int do_close : 1;
+
+	struct
+	{
+		struct ringleader_arena *arena;
+		void * block;
+		size_t block_size;
+		size_t block_off;
+		size_t n_pending;
+	} writer;
+
+	struct ringleader_reader *reader;
+};
 
 struct musl_rl_async_pwrite_ctx
 {
@@ -10,87 +89,170 @@ struct musl_rl_async_pwrite_ctx
 	int fd;
 };
 
-struct musl_rl_async_fd
-{
-	size_t offset;
-	unsigned int flags;
-	mode_t mode;
-	size_t block_size;
-	size_t file_size;
 
-	size_t n_writes_pending;
-	size_t n_reads_pending;
-
-	struct ringleader_arena *current_block_arena;
-	void * current_block;
-	size_t current_block_offset;
-
-	struct ringleader_reader *reader;
-
-	int errcode;
-	int file_open : 1;
-	int do_close : 1;
-};
 struct musl_rl_async_fd musl_rl_async_fds[64] = {0};
+
+
+static void
+musl_rl_async_fd_do_statx(
+		struct ringleader *rl,
+		int fd)
+{
+	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
+
+	//TODO async statx
+	struct statx stx;
+	//int statx_flags = (flags & O_NOFOLLOW) ? AT_SYMLINK_NOFOLLOW : 0;
+	int statx_flags = AT_EMPTY_PATH;
+	unsigned int statx_mask = (
+			STATX_BLOCKS |
+			STATX_SIZE |
+			STATX_TYPE |
+			STATX_MODE);
+
+	int statx_ret = musl_ringleader_statx(fd,
+			"",
+			statx_flags,
+			statx_mask,
+			&stx);
+
+	if(statx_ret == 0)
+	{
+		file->file_size = stx.stx_size;
+
+		file->writer.block_size = stx.stx_blksize;
+		file->file_size = stx.stx_size;
+
+		if(S_ISFIFO(stx.stx_mode) || S_ISSOCK(stx.stx_mode))
+		{
+			file->offset = -1;
+			file->is_async = 1;
+		}
+
+		if(S_ISREG(stx.stx_mode))
+		{
+			file->is_async = 1;
+		}
+	}
+
+	file->statx_done = 1;
+}
 
 
 void
 musl_rl_async_fd_init(
-		int fd,
-		unsigned int flags,
-		mode_t mode,
-		size_t block_size,
-		size_t block_count,
-		size_t file_size)
+		struct ringleader *rl,
+		int fd)
 {
-	if(fd >= 64)
+	if(fd >= 64 || fd < 0)
 	{
-		fprintf(stdenclave, "musl_ringleader_config_async: fd too large\n");
+		/* we only async files 0-63 */
 		return;
 	}
 
-	struct ringleader *rl = get_ringleader();
+	/* discovered an open file */
+	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
+
+	DEBUG_ASSERT(!file->file_open);
+
+	file->file_open = 1;
+	file->is_async = 0;
+	file->statx_done = 0;
+	file->errcode = 0;
+	file->do_close = 0;
+
+	file->offset = 0;
+
+	file->writer.arena = NULL;
+	file->writer.block = NULL;
+	file->writer.block_off = 0;
+	file->writer.block_size = 4096;
+	file->writer.n_pending = 0;
+
+	musl_rl_async_fd_do_statx(rl, fd);
+}
+
+
+void
+musl_rl_async_fd_init_reading(
+		struct ringleader *rl,
+		int fd,
+		size_t hint)
+{
+	struct ringleader_arena * arena = musl_ringleader_get_arena(
+			rl, NEXT_POW2(hint) * 16);
+
+	musl_rl_async_fds[fd].reader = ringleader_reader_factory(
+			rl,
+			arena,
+			fd,
+			0,
+			musl_rl_async_fds[fd].file_size);
+}
+
+
+void
+musl_rl_async_fd_try_open(
+		struct ringleader *rl,
+		int fd,
+		unsigned int flags,
+		mode_t mode)
+{
+	if(fd >= 64 || fd < 0)
+	{
+		/* we only async files 0-63 */
+		return;
+	}
 
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
-	file->offset = 0;
-	file->flags = flags;
-	file->mode = mode;
-	file->block_size = block_size;
-	file->n_writes_pending = 0;
-	file->n_reads_pending = 0;
-	file->errcode = 0;
-	file->file_open = 1;
-	file->do_close = 0;
-	file->file_size = file_size;
 
-	file->current_block_arena = NULL;
-	file->current_block = NULL;
-	file->current_block_offset = 0;
-
-	if(file->flags & O_APPEND)
+	if((flags & O_DIRECTORY) || (flags & O_PATH))
 	{
-		file->offset = file_size;
+		/* not an async file */
+		file->file_open = 1;
+		file->statx_done = 1;
+		file->is_async = 0;
+		return;
+	}
+
+	musl_rl_async_fd_init(rl, fd);
+
+	if(flags & O_APPEND)
+	{
+		file->offset = file->file_size;
 	}
 
 	if(flags & O_RDONLY || flags & O_RDWR)
 	{
-		struct ringleader_arena * arena = musl_ringleader_get_arena(
-				rl, NEXT_POW2(block_size) * 16);
-		file->reader = ringleader_reader_factory(
-				rl,
-				arena,
-				fd,
-				0,
-				file_size);
+		musl_rl_async_fd_init_reading(rl, fd, file->writer.block_size);
+	}
+
+	if(flags & O_WRONLY || flags & O_RDWR)
+	{
+		//NOP
 	}
 }
 
 bool
 musl_rl_async_fd_check(int fd)
 {
-	return  fd < SIZEOF_ARRAY(musl_rl_async_fds) &&
-			fd >= 0 &&
-			musl_rl_async_fds[fd].file_open;
+	if(fd >= SIZEOF_ARRAY(musl_rl_async_fds) || fd < 0)
+	{
+		return false;
+	}
+
+	if(!musl_rl_async_fds[fd].file_open)
+	{
+		musl_rl_async_fd_init(get_ringleader(), fd);
+	}
+
+
+	if(!musl_rl_async_fds[fd].statx_done)
+	{
+		musl_rl_async_fd_do_statx(get_ringleader(), fd);
+	}
+
+	return musl_rl_async_fds[fd].is_async;
 }
 
 void
@@ -98,7 +260,7 @@ musl_rl_async_fd_finish_all(struct ringleader *rl)
 {
 	for(int i = 0; i < SIZEOF_ARRAY(musl_rl_async_fds); i++)
 	{
-		if(musl_rl_async_fds[i].file_open)
+		if(musl_rl_async_fds[i].file_open && musl_rl_async_fds[i].is_async)
 		{
 			if(!musl_rl_async_fds[i].do_close)
 			{
@@ -109,7 +271,7 @@ musl_rl_async_fd_finish_all(struct ringleader *rl)
 
 	for(int i = 0; i < SIZEOF_ARRAY(musl_rl_async_fds); i++)
 	{
-		while(musl_rl_async_fds[i].file_open)
+		while(musl_rl_async_fds[i].file_open && musl_rl_async_fds[i].is_async)
 		{
 			/* Ignore any cookies since this should be called at exit time */
 			struct io_uring_cqe cqe;
@@ -141,12 +303,12 @@ musl_rl_async_pwrite_done(
 		file->errcode = -cqe->res;
 	}
 
-	if(file->n_writes_pending == 0 || !file->file_open)
+	if(file->writer.n_pending == 0 || !file->file_open)
 	{
 		fprintf(stdenclave, "musl_rl_async_pwrite_done: invalid file state\n");
 		goto done;
 	}
-	file->n_writes_pending--;
+	file->writer.n_pending--;
 
 	if(file->do_close)
 	{
@@ -189,16 +351,18 @@ musl_rl_async_dispatch_block(
 		size_t new_block_size)
 {
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
-	struct ringleader_arena *arena = file->current_block_arena;
-	void *shmem = file->current_block;
-	size_t count = file->current_block_offset;
+	struct ringleader_arena *arena = file->writer.arena;
+	void *shmem = file->writer.block;
+	size_t count = file->writer.block_off;
 
 	if(count == 0)
 	{
 		return;
 	}
 
-	off_t offset = file->offset - file->current_block_offset;
+	off_t offset = (file->offset >= 0) ?
+		(file->offset - file->writer.block_off) :
+		-1;
 
 	ringleader_promise_t p1 = ringleader_sqe_alloc(
 			rl, fd, IORING_OP_WRITE_FIXED, shmem, count, offset);
@@ -214,88 +378,85 @@ musl_rl_async_dispatch_block(
 	ringleader_promise_then(rl, p2, musl_rl_async_pwrite_ready);
 	ringleader_promise_free_on_fulfill(rl, p1);
 	ringleader_promise_free_on_fulfill(rl, p2);
-	musl_rl_async_fds[fd].n_writes_pending++;
+	musl_rl_async_fds[fd].writer.n_pending++;
 
-	file->current_block_offset = 0;
+	file->writer.block_off = 0;
 
 	if(new_block_size == 0)
 	{
-		file->current_block_arena = NULL;
-		file->current_block = NULL;
+		file->writer.arena = NULL;
+		file->writer.block = NULL;
 		return;
 	}
 
-	file->current_block_arena = musl_ringleader_get_arena(rl, new_block_size);
-	file->current_block = ringleader_arena_push(
-		file->current_block_arena, new_block_size);
-	file->block_size = new_block_size;
+	file->writer.arena = musl_ringleader_get_arena(rl, new_block_size);
+	file->writer.block = ringleader_arena_push(
+		file->writer.arena, new_block_size);
+	file->writer.block_size = new_block_size;
 }
 
 
 
 ssize_t
-musl_rl_async_pwrite(
+musl_rl_async_write(
 		struct ringleader *rl,
 		int fd,
 		const void *buf,
-		size_t count,
-		off_t offset)
+		size_t count)
 {
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
 
-	if(!file->current_block_arena)
+	if(!file->writer.arena)
 	{
-		file->current_block_arena = musl_ringleader_get_arena(rl, count);
-		file->current_block = ringleader_arena_push(
-				file->current_block_arena, count);
-		file->current_block_offset = 0;
+		file->writer.arena = musl_ringleader_get_arena(rl, count);
+		file->writer.block = ringleader_arena_push(
+				file->writer.arena, count);
+		file->writer.block_off = 0;
 	}
 
-	if(offset != -1 && offset != file->offset)
-	{
-		fprintf(stdenclave, "musl_rl_async_pwrite: offset not supported\n");
-		return 0;
-	}
-	else
-	{
-		size_t rem = count;
-		size_t blk_rem = file->block_size - file->current_block_offset;
-		size_t cpy_size = MIN(blk_rem, rem);
+	size_t rem = count;
+	size_t blk_rem = file->writer.block_size - file->writer.block_off;
+	size_t cpy_size = MIN(blk_rem, rem);
 
-		memcpy((char*)file->current_block + file->current_block_offset,
-				buf,
-				cpy_size);
+	memcpy((char*)file->writer.block + file->writer.block_off,
+			buf,
+			cpy_size);
 
-		file->current_block_offset += cpy_size;
+	file->writer.block_off += cpy_size;
+	rem -= cpy_size;
+	if(file->offset >= 0)
+	{
 		file->offset += cpy_size;
-		rem -= cpy_size;
+	}
 
-		if(file->current_block_offset == file->block_size)
+	if(file->writer.block_off == file->writer.block_size)
+	{
+		size_t new_block_size = file->writer.block_size;
+
+		/* Scale our block size up to allow for at least 16 copies */
+		while(new_block_size < count * 16)
 		{
-			size_t new_block_size = file->block_size;
+			//TODO no overflow check
+			new_block_size *= 2;
+		}
 
-			/* Scale our block size up to allow for at least 16 copies */
-			while(new_block_size < count * 16)
+		musl_rl_async_dispatch_block(rl, fd,
+				new_block_size);
+
+		if(rem)
+		{
+			memcpy((char*)file->writer.block,
+					(const char *)buf + cpy_size,
+					rem);
+			file->writer.block_off = rem;
+			if(file->offset >= 0)
 			{
-				//TODO no overflow check
-				new_block_size *= 2;
-			}
-
-			musl_rl_async_dispatch_block(rl, fd,
-					new_block_size);
-
-			if(rem)
-			{
-				memcpy((char*)file->current_block,
-						(const char *)buf + cpy_size,
-						rem);
-				file->current_block_offset = rem;
 				file->offset += rem;
 			}
 		}
-
-		file->file_size = MAX(file->file_size, file->offset);
 	}
+
+	file->file_size = MAX(file->file_size, file->offset);
 
 	return count;
 }
@@ -310,12 +471,14 @@ musl_rl_async_fd_lseek(
 {
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
 
+	DEBUG_ASSERT(file->offset >= 0);
+
 	switch(whence)
 	{
 		case SEEK_SET:
 			if(offset != file->offset)
 			{
-				musl_rl_async_dispatch_block(rl, fd, file->block_size);
+				musl_rl_async_dispatch_block(rl, fd, file->writer.block_size);
 
 				file->offset = offset;
 				if(file->reader)
@@ -331,7 +494,7 @@ musl_rl_async_fd_lseek(
 		case SEEK_CUR:
 			if(offset != 0)
 			{
-				musl_rl_async_dispatch_block(rl, fd, file->block_size);
+				musl_rl_async_dispatch_block(rl, fd, file->writer.block_size);
 
 				file->offset += offset;
 				if(file->reader)
@@ -347,7 +510,7 @@ musl_rl_async_fd_lseek(
 		case SEEK_END:
 			if(offset != 0)
 			{
-				musl_rl_async_dispatch_block(rl, fd, file->block_size);
+				musl_rl_async_dispatch_block(rl, fd, file->writer.block_size);
 				if(file->reader)
 				{
 					ringleader_reader_reset(
@@ -387,6 +550,8 @@ musl_rl_async_fd_close_done(
 	struct musl_rl_async_fd *file = (void*)cqe->user_data;
 
 	file->file_open = 0;
+	file->statx_done = 0;
+	file->is_async = 0;
 	ringleader_promise_set_result(rl, promise, (void*)(uintptr_t)cqe->res);
 }
 
@@ -396,22 +561,27 @@ musl_rl_async_fd_close(
 		struct ringleader *rl,
 		int fd)
 {
-	if(!musl_rl_async_fd_check(fd))
+	if(fd >= SIZEOF_ARRAY(musl_rl_async_fds) || fd < 0)
 	{
-		fprintf(stdenclave, "musl_rl_async_fd_close: file not async\n");
 		return -1;
 	}
 
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
 	if(!file->file_open)
 	{
-		fprintf(stdenclave, "musl_rl_async_fd_close: file not open\n");
+		return -1;
+	}
+
+	if(!file->is_async)
+	{
+		/* not an async file */
+		file->file_open = 0;
 		return -1;
 	}
 
 	musl_rl_async_dispatch_block(rl, fd, 0);
 
-	if(file->n_writes_pending == 0 && file->n_reads_pending == 0)
+	if(file->writer.n_pending == 0)
 	{
 		int close_sqe = ringleader_prep_close(rl, fd);
 		ringleader_sqe_set_data(rl, close_sqe, (void*)file);
@@ -439,17 +609,28 @@ musl_rl_async_fd_read(
 {
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
 
-	/* if have been writing, flush writes first */
-	if(file->n_writes_pending > 0)
+	if(!file->file_open)
 	{
-		musl_rl_async_dispatch_block(rl, fd, 0);
+		musl_rl_async_fd_init(rl, fd);
 	}
 
-	/* don't read until writes are all done */
-	while(file->n_writes_pending > 0)
+	if(file->reader == NULL)
 	{
-		musl_ringleader_flush_cqes(rl);
+		musl_rl_async_fd_init_reading(rl, fd, file->writer.block_size);
 	}
+
+	/* if have been writing, flush writes first */
+	if(file->writer.n_pending > 0)
+	{
+		musl_rl_async_dispatch_block(rl, fd, 0);
+
+		/* don't read until writes are all done */
+		while(file->writer.n_pending > 0)
+		{
+			musl_ringleader_flush_cqes(rl);
+		}
+	}
+
 
 
 	ringleader_promise_t p_read = ringleader_reader_read(
@@ -458,6 +639,10 @@ musl_rl_async_fd_read(
 			buf,
 			count);
 
-	file->offset = file->reader->file.off;
+	if(file->offset >= 0)
+	{
+		file->offset = file->reader->file.off;
+	}
 	return (intptr_t)ringleader_promise_await(rl, p_read, NULL);
 }
+

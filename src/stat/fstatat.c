@@ -45,6 +45,8 @@ struct statx {
 #undef SYS_fstatat
 #endif
 
+
+
 void *
 musl_ringleader_statx_async(
 		struct ringleader * rl,
@@ -75,11 +77,23 @@ musl_ringleader_statx(
 		void *restrict statxbuff)
 {
 	struct ringleader *rl = get_ringleader();
-	struct ringleader_arena *arena =
-		musl_ringleader_get_arena(rl, PATH_MAX + sizeof(struct statx));
 
-	char *shmem_path = ringleader_arena_push(arena, PATH_MAX);
-	strncpy(shmem_path, path, PATH_MAX);
+	size_t arena_size = sizeof(struct statx);
+
+	if(path != NULL)
+	{
+		arena_size += PATH_MAX;
+	}
+
+	struct ringleader_arena *arena =
+		musl_ringleader_get_arena(rl, arena_size);
+
+	char *shmem_path = NULL;
+	if(path != NULL)
+	{
+		shmem_path = ringleader_arena_push(arena, PATH_MAX);
+		strncpy(shmem_path, path, PATH_MAX);
+	}
 
 	void *shmem_statxbuff;
 	void *cookie = musl_ringleader_statx_async(rl, arena, dirfd, shmem_path,

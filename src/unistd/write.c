@@ -15,7 +15,7 @@ ssize_t musl_ringleader_write(int fd, const void *buf, size_t count)
 
 	if(musl_rl_async_fd_check(fd))
 	{
-		return musl_rl_async_pwrite(rl, fd, buf, count, -1);
+		return musl_rl_async_write(rl, fd, buf, count);
 	}
 
 	struct ringleader_arena *arena =

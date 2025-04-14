@@ -126,7 +126,6 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
     if(!f->rl.buf_arena)
     {
         f->rl.buf_arena = musl_ringleader_get_arena(rl, BUFSIZ + UNGET);
-        ringleader_arena_push(f->rl.buf_arena, UNGET);
     }
 
     /* migrate to arena buffer, if not in shmem */
@@ -135,6 +134,8 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
         /* first stdout, and handling for all stderr prints */
         /* copy current buffer into new shmem buffer */
 
+        ringleader_arena_clear(f->rl.buf_arena);
+        ringleader_arena_push(f->rl.buf_arena, UNGET);
         intptr_t diff = (intptr_t)f->buf;
         f->buf = ringleader_arena_apush(f->rl.buf_arena, f->buf, f->buf_size);
         diff = (intptr_t)f->buf - diff;

@@ -25,24 +25,21 @@ void *  musl_ringleader_statx_async(
 			int flag,
 			unsigned int mask,
 			void ** out_shmem_statxbuff);
-void     musl_rl_async_fd_init(
+void     musl_rl_async_fd_try_open(
+			struct ringleader *rl,
 			int fd,
 			unsigned int flags,
-			mode_t mode,
-			size_t block_size,
-			size_t block_count,
-			size_t file_size);
+			mode_t mode);
 bool    musl_rl_async_fd_check(int fd);
 void    musl_rl_async_fd_finish_all(struct ringleader *rl);
 int     musl_rl_async_fd_close(
 			struct ringleader *rl,
 			int fd);
-ssize_t musl_rl_async_pwrite(
+ssize_t musl_rl_async_write(
 			struct ringleader *rl,
 			int fd,
 			const void *buf,
-			size_t count,
-			off_t offset);
+			size_t count);
 off_t   musl_rl_async_fd_lseek(
 			struct ringleader *rl,
 			int fd,
