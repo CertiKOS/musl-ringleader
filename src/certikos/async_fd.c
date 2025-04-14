@@ -83,7 +83,7 @@ struct musl_rl_async_fd
 	struct ringleader_reader *reader;
 };
 
-struct musl_rl_async_pwrite_ctx
+struct musl_rl_async_write_ctx
 {
 	struct ringleader_arena *arena;
 	int fd;
@@ -123,6 +123,8 @@ musl_rl_async_fd_do_statx(
 		file->writer.block_size = stx.stx_blksize;
 		file->file_size = stx.stx_size;
 
+		/* Buffering a FIFO or Socket is not supported.
+		 * It will break some of the expected behaviors */
 		if(S_ISFIFO(stx.stx_mode) || S_ISSOCK(stx.stx_mode))
 		{
 			file->offset = -1;
@@ -282,49 +284,62 @@ musl_rl_async_fd_finish_all(struct ringleader *rl)
 
 
 
+static void
+musl_rl_async_dispatch_block(
+		struct ringleader *rl,
+		int fd,
+		size_t new_block_size);
 
 
-void
-musl_rl_async_pwrite_done(
+static void
+musl_rl_async_write_done(
 		struct ringleader *rl,
 		ringleader_promise_t promise,
 		void *data)
 {
 	struct io_uring_cqe *cqe = data;
 
-	struct musl_rl_async_pwrite_ctx *ctx =
+	struct musl_rl_async_write_ctx *ctx =
 		ringleader_promise_get_ctx_fast(rl, promise,
-				struct musl_rl_async_pwrite_ctx);
+				struct musl_rl_async_write_ctx);
 
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[ctx->fd];
+
+	DEBUG_ASSERT(file->file_open);
+	DEBUG_ASSERT(file->writer.n_pending > 0);
+
+	ringleader_promise_set_result(rl, promise, (void*)(uintptr_t)cqe->res);
+	ringleader_arena_free(rl, ctx->arena);
 
 	if(cqe->res < 0 && file->errcode == 0)
 	{
 		file->errcode = -cqe->res;
 	}
 
-	if(file->writer.n_pending == 0 || !file->file_open)
-	{
-		fprintf(stdenclave, "musl_rl_async_pwrite_done: invalid file state\n");
-		goto done;
-	}
 	file->writer.n_pending--;
+
+	if(file->writer.block_off > 0 &&
+			file->offset < 0 &&
+			file->writer.n_pending == 0)
+	{
+		/* we are a FIFO or socket, and have not flushed all our data,
+		 * and no other writes are occurring, then flush */
+		musl_rl_async_dispatch_block(rl, ctx->fd, file->writer.block_size);
+	}
+	//TODO forward arena, instead of allocating a new one
+	//else if(file->writer.arena == NULL)
+	//{
+	//}
 
 	if(file->do_close)
 	{
 		(void) musl_rl_async_fd_close(rl, ctx->fd);
 	}
-
-
-done:
-	ringleader_promise_set_result(rl, promise, (void*)(uintptr_t)cqe->res);
-	ringleader_arena_free(rl, ctx->arena);
 }
 
 
-
-void
-musl_rl_async_pwrite_ready(
+static void
+musl_rl_async_write_ready(
 		struct ringleader *rl,
 		ringleader_promise_t p_ready,
 		void *data)
@@ -334,17 +349,17 @@ musl_rl_async_pwrite_ready(
 	ringleader_sqe_set_flags(rl, sqe_id, IOSQE_ASYNC);
 
 	ringleader_promise_t p_done = ringleader_sqe_then(rl, sqe_id,
-			(void*)musl_rl_async_pwrite_done);
+			(void*)musl_rl_async_write_done);
 
 	ringleader_promise_dup_ctx(rl, p_done, p_ready,
-			struct musl_rl_async_pwrite_ctx);
+			struct musl_rl_async_write_ctx);
 
 	ringleader_submit(rl);
 	ringleader_promise_free_on_fulfill(rl, p_done);
 	ringleader_promise_set_result(rl, p_ready, NULL);
 }
 
-void
+static void
 musl_rl_async_dispatch_block(
 		struct ringleader *rl,
 		int fd,
@@ -369,13 +384,13 @@ musl_rl_async_dispatch_block(
 
 	ringleader_promise_t p2 = ringleader_promise_chain(rl, p1);
 
-	struct musl_rl_async_pwrite_ctx *ctx =
+	struct musl_rl_async_write_ctx *ctx =
 		ringleader_promise_get_ctx_fast(rl, p2,
-				struct musl_rl_async_pwrite_ctx);
+				struct musl_rl_async_write_ctx);
 	ctx->arena = arena;
 	ctx->fd = fd;
 
-	ringleader_promise_then(rl, p2, musl_rl_async_pwrite_ready);
+	ringleader_promise_then(rl, p2, musl_rl_async_write_ready);
 	ringleader_promise_free_on_fulfill(rl, p1);
 	ringleader_promise_free_on_fulfill(rl, p2);
 	musl_rl_async_fds[fd].writer.n_pending++;
@@ -408,9 +423,9 @@ musl_rl_async_write(
 
 	if(!file->writer.arena)
 	{
-		file->writer.arena = musl_ringleader_get_arena(rl, count);
+		file->writer.arena = musl_ringleader_get_arena(rl, file->writer.block_size);
 		file->writer.block = ringleader_arena_push(
-				file->writer.arena, count);
+				file->writer.arena, file->writer.block_size);
 		file->writer.block_off = 0;
 	}
 
@@ -429,7 +444,11 @@ musl_rl_async_write(
 		file->offset += cpy_size;
 	}
 
-	if(file->writer.block_off == file->writer.block_size)
+	/* if we have a full block, or
+	 * if we are a FIFO or socket and we aren't currently writing data,
+	 * then flush the block */
+	if(file->writer.block_off == file->writer.block_size ||
+			(file->offset < 0 && file->writer.n_pending == 0))
 	{
 		size_t new_block_size = file->writer.block_size;
 
