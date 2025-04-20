@@ -67,6 +67,13 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
 	if (f->buf_size) buf[len-1] = *f->rpos++;
 	return len;
 #else
+    struct ringleader *rl = get_ringleader();
+
+    if(musl_rl_async_fd_check(f->fd))
+    {
+        /* buffering is happening at lower level */
+        return __syscall_ret(musl_rl_async_fd_read(rl, f->fd, buf, len));
+    }
 
     ssize_t cnt = __syscall_ret(musl_ringleader_read(f->fd, buf, len));
 
@@ -75,13 +82,12 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
         return 0;
     }
 
-    struct ringleader *rl = get_ringleader();
     if(!f->rl.buf_arena)
     {
         /* stdin first read */
         f->rl.buf_arena = musl_ringleader_get_arena(rl, BUFSIZ + UNGET);
         f->buf = ringleader_arena_push(f->rl.buf_arena, UNGET + BUFSIZ);
-        f->buf = buf + UNGET;
+        f->buf += UNGET;
         f->buf_size = BUFSIZ;
     }
 

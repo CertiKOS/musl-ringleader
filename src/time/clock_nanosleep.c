@@ -42,8 +42,9 @@ int __clock_nanosleep(clockid_t clk, int flags, const struct timespec *req, stru
     clock_gettime(clk, &start);
     current = start;
 
-    while(current.tv_sec - start.tv_sec < req->tv_sec &&
-            current.tv_nsec - start.tv_nsec < req->tv_nsec)
+    while(current.tv_sec - start.tv_sec < req->tv_sec || (
+            current.tv_sec - start.tv_sec == req->tv_sec &&
+            current.tv_nsec - start.tv_nsec < req->tv_nsec))
     {
         clock_gettime(clk, &current);
     }

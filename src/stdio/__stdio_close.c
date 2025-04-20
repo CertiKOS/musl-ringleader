@@ -18,9 +18,14 @@ int __stdio_close(FILE *f)
 #ifndef _CERTIKOS_
 	return syscall(SYS_close, __aio_close(f->fd));
 #else
+	struct ringleader *rl = get_ringleader();
+
+	if(musl_rl_async_fd_close(rl, f->fd) == 0)
+	{
+		return 0;
+	}
 
 	/* wait for outstanding write to complete */
-	struct ringleader *rl = get_ringleader();
 	while(f->rl.in_flight_arenas[0] || f->rl.in_flight_arenas[1])
 	{
 		musl_ringleader_flush_cqes(rl);

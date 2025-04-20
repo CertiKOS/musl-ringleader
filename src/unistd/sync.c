@@ -13,6 +13,9 @@ void musl_ringleader_sync()
 	/* drain all sqes before this one, prevent future sqes from being
 	 * submitted until this one is completed */
 	ringleader_sqe_set_flags(rl, id, IOSQE_IO_DRAIN | IOSQE_CQE_SKIP_SUCCESS);
+
+	ringleader_promise_t p = ringleader_sqe_then(rl, id, NULL);
+	ringleader_promise_free_on_fulfill(rl, p);
 	ringleader_submit(rl);
 
 	/* don't wait */

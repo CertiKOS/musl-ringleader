@@ -78,6 +78,7 @@ struct musl_rl_async_fd
 		size_t block_size;
 		size_t block_off;
 		size_t n_pending;
+		size_t estimated_max_write_size;
 	} writer;
 
 	struct ringleader_reader *reader;
@@ -87,6 +88,8 @@ struct musl_rl_async_write_ctx
 {
 	struct ringleader_arena *arena;
 	int fd;
+	size_t total;
+	size_t remaining;
 };
 
 
@@ -155,7 +158,16 @@ musl_rl_async_fd_init(
 	/* discovered an open file */
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
 
-	DEBUG_ASSERT(!file->file_open);
+	if(file->file_open && file->do_close)
+	{
+		ringleader_reader_destroy(rl, &file->reader);
+
+		/* wait until close is done */
+		while(file->file_open)
+		{
+			musl_ringleader_flush_cqes(rl);
+		}
+	}
 
 	file->file_open = 1;
 	file->is_async = 0;
@@ -170,6 +182,7 @@ musl_rl_async_fd_init(
 	file->writer.block_off = 0;
 	file->writer.block_size = 4096;
 	file->writer.n_pending = 0;
+	file->writer.estimated_max_write_size = 128*1024;
 
 	musl_rl_async_fd_do_statx(rl, fd);
 }
@@ -331,7 +344,7 @@ musl_rl_async_write_done(
 	//{
 	//}
 
-	if(file->do_close)
+	if(file->do_close && file->writer.n_pending == 0)
 	{
 		(void) musl_rl_async_fd_close(rl, ctx->fd);
 	}
@@ -452,6 +465,13 @@ musl_rl_async_write(
 	{
 		size_t new_block_size = file->writer.block_size;
 
+		/* for non-FIFO/socket files, we can double the block size
+		 * if we have a lot of pending writes */
+		if(file->writer.n_pending > 8 && file->offset >= 0)
+		{
+			new_block_size *= 2;
+		}
+
 		/* Scale our block size up to allow for at least 16 copies */
 		while(new_block_size < count * 16)
 		{
@@ -490,7 +510,10 @@ musl_rl_async_fd_lseek(
 {
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
 
-	DEBUG_ASSERT(file->offset >= 0);
+	if(file->offset < 0)
+	{
+		return -ESPIPE;
+	}
 
 	switch(whence)
 	{
@@ -500,14 +523,10 @@ musl_rl_async_fd_lseek(
 				musl_rl_async_dispatch_block(rl, fd, file->writer.block_size);
 
 				file->offset = offset;
-				if(file->reader)
-				{
-					ringleader_reader_reset(
-							rl,
-							file->reader,
-							file->file_size,
-							offset);
-				}
+				ringleader_reader_reset(
+						rl,
+						&file->reader,
+						offset);
 			}
 			break;
 		case SEEK_CUR:
@@ -516,28 +535,20 @@ musl_rl_async_fd_lseek(
 				musl_rl_async_dispatch_block(rl, fd, file->writer.block_size);
 
 				file->offset += offset;
-				if(file->reader)
-				{
-					ringleader_reader_reset(
-							rl,
-							file->reader,
-							file->file_size,
-							file->offset);
-				}
+				ringleader_reader_reset(
+						rl,
+						&file->reader,
+						file->offset);
 			}
 			break;
 		case SEEK_END:
 			if(offset != 0)
 			{
 				musl_rl_async_dispatch_block(rl, fd, file->writer.block_size);
-				if(file->reader)
-				{
-					ringleader_reader_reset(
-							rl,
-							file->reader,
-							file->file_size,
-							file->offset + file->file_size + offset);
-				}
+				ringleader_reader_reset(
+						rl,
+						&file->reader,
+						file->offset + file->file_size + offset);
 			}
 			file->offset = file->file_size + offset;
 			break;
@@ -571,6 +582,12 @@ musl_rl_async_fd_close_done(
 	file->file_open = 0;
 	file->statx_done = 0;
 	file->is_async = 0;
+
+	if(file->reader)
+	{
+		ringleader_reader_destroy(rl, &file->reader);
+	}
+
 	ringleader_promise_set_result(rl, promise, (void*)(uintptr_t)cqe->res);
 }
 
@@ -627,11 +644,7 @@ musl_rl_async_fd_read(
 		size_t count)
 {
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
-
-	if(!file->file_open)
-	{
-		musl_rl_async_fd_init(rl, fd);
-	}
+	DEBUG_ASSERT(file->file_open);
 
 	if(file->reader == NULL)
 	{
@@ -639,7 +652,7 @@ musl_rl_async_fd_read(
 	}
 
 	/* if have been writing, flush writes first */
-	if(file->writer.n_pending > 0)
+	if(file->writer.n_pending > 0 || file->writer.block_off > 0)
 	{
 		musl_rl_async_dispatch_block(rl, fd, 0);
 
@@ -658,10 +671,13 @@ musl_rl_async_fd_read(
 			buf,
 			count);
 
+	ssize_t ret = (uintptr_t)ringleader_promise_await(rl, p_read, NULL);
+
 	if(file->offset >= 0)
 	{
 		file->offset = file->reader->file.off;
 	}
-	return (intptr_t)ringleader_promise_await(rl, p_read, NULL);
+
+	return ret;
 }
 
