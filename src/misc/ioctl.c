@@ -40,8 +40,11 @@ int musl_ringleader_ioctl(int fd, int req, void* arg)
 	{
 		arena = musl_ringleader_get_arena(rl, arg_size);
 		shmem = ringleader_arena_apush(arena, arg, arg_size);
-		id = ringleader_prep_ioctl(rl, fd, req,
-				ringleader_calc_proxy_addr(rl, shmem));
+		id = ringleader_prep_ioctl(
+				rl,
+				fd,
+				req,
+				(uintptr_t)ringleader_arena_translate(rl, arena, shmem));
 	}
 	else
 	{

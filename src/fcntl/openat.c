@@ -26,7 +26,7 @@ musl_ringleader_openat(
 	void * shmem_filename = ringleader_arena_push(arena, PATH_MAX);
 	strncpy(shmem_filename, filename, PATH_MAX);
 
-	int open_sqe_id = ringleader_prep_openat(
+	int open_sqe_id = ringleader_sqe_openat_await(
 			rl,
 			dirfd,
 			shmem_filename,

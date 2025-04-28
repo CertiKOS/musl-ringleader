@@ -66,7 +66,7 @@ int musl_ringleader_fcntl(int fd, int cmd, long arg)
         }
 
         id = ringleader_prep_fcntl(rl, fd, cmd,
-                ringleader_arena_translate(rl, arena, shmem));
+                (uintptr_t)ringleader_arena_translate(rl, arena, shmem));
     }
     else
     {

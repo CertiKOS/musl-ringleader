@@ -33,35 +33,41 @@ void     musl_rl_async_fd_try_open(
 			int fd,
 			unsigned int flags,
 			mode_t mode);
-bool    musl_rl_async_fd_check(int fd);
+
 void    musl_rl_async_fd_finish_all(struct ringleader *rl);
+
 int     musl_rl_async_fd_close(
 			struct ringleader *rl,
 			int fd);
+
 ssize_t musl_rl_async_write(
 			struct ringleader *rl,
 			int fd,
 			const void *buf,
 			size_t count);
+
 off_t   musl_rl_async_fd_lseek(
 			struct ringleader *rl,
 			int fd,
 			off_t offset,
 			int whence);
+
 off_t musl_ringleader_do_lseek(
 		struct ringleader *rl,
 		int fd,
 		off_t offset,
 		int whence);
+
 ssize_t musl_rl_async_fd_read(
 			struct ringleader *rl,
 			int fd,
 			void *buf,
 			size_t count);
+
 struct musl_rl_async_fd*
 musl_rl_async_fd_try_ensure(
 		struct ringleader *rl,
-		int fd)
+		int fd);
 
 
 
@@ -88,7 +94,7 @@ musl_ringleader_check_cookie(void *cookie, struct io_uring_cqe *cqe)
 }
 
 
-statc inline bool
+static inline bool
 musl_rl_async_fd_check(int fd)
 {
 	return musl_rl_async_fd_try_ensure(get_ringleader(), fd) != NULL;
