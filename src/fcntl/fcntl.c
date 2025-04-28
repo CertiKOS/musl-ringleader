@@ -66,7 +66,7 @@ int musl_ringleader_fcntl(int fd, int cmd, long arg)
         }
 
         id = ringleader_prep_fcntl(rl, fd, cmd,
-                ringleader_calc_proxy_addr(rl, shmem));
+                ringleader_arena_translate(rl, arena, shmem));
     }
     else
     {
@@ -84,6 +84,7 @@ int musl_ringleader_fcntl(int fd, int cmd, long arg)
     }
 
     ringleader_free_arena(rl, arena);
+
     return ret;
 }
 

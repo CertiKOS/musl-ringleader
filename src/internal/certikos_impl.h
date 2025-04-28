@@ -25,6 +25,9 @@ void *  musl_ringleader_statx_async(
 			int flag,
 			unsigned int mask,
 			void ** out_shmem_statxbuff);
+
+
+
 void     musl_rl_async_fd_try_open(
 			struct ringleader *rl,
 			int fd,
@@ -45,11 +48,20 @@ off_t   musl_rl_async_fd_lseek(
 			int fd,
 			off_t offset,
 			int whence);
+off_t musl_ringleader_do_lseek(
+		struct ringleader *rl,
+		int fd,
+		off_t offset,
+		int whence);
 ssize_t musl_rl_async_fd_read(
 			struct ringleader *rl,
 			int fd,
 			void *buf,
 			size_t count);
+struct musl_rl_async_fd*
+musl_rl_async_fd_try_ensure(
+		struct ringleader *rl,
+		int fd)
 
 
 
@@ -76,6 +88,11 @@ musl_ringleader_check_cookie(void *cookie, struct io_uring_cqe *cqe)
 }
 
 
+statc inline bool
+musl_rl_async_fd_check(int fd)
+{
+	return musl_rl_async_fd_try_ensure(get_ringleader(), fd) != NULL;
+}
 
 
 #endif

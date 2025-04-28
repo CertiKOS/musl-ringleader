@@ -42,9 +42,6 @@ musl_ringleader_openat(
 
 	ringleader_free_arena(rl, arena);
 
-	musl_rl_async_fd_try_open(rl, ret, flags, mode);
-
-
 	return __syscall_ret(ret);
 }
 #endif
