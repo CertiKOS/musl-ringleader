@@ -219,7 +219,7 @@ musl_rl_async_fd_do_seek_set(
 
 	if(file->reader)
 	{
-		ringleader_reader_reset(rl, &file->reader, offset);
+		ringleader_reader_reset(rl, &file->reader);
 	}
 
 
@@ -424,7 +424,7 @@ musl_rl_async_fd_read(
 				rl,
 				arena,
 				fd,
-				0,
+				file->block_size,
 				musl_rl_async_fds[fd].file_size,
 				512*1024 /* max buffer size, magic for Pi4b's L2 */);
 	}
@@ -439,7 +439,7 @@ musl_rl_async_fd_read(
 
 	if(file->offset >= 0)
 	{
-		file->offset = file->reader->file.off;
+		file->offset += ret;
 	}
 
 	return ret;
