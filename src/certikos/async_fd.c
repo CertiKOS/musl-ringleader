@@ -331,6 +331,7 @@ musl_rl_async_fd_writer_drained(
 
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
 	ringleader_writer_destroy(rl, &file->writer);
+
 	musl_rl_async_fd_do_close(rl, fd);
 
 	ringleader_promise_set_result_dontcare(rl, p_drain);
@@ -404,15 +405,28 @@ musl_rl_async_fd_read(
 
 	if(file->reader == NULL)
 	{
+		size_t max_write = SIZE_MAX;
+
+		if(file->is_fifo)
+		{
+			/* we want to grow the pipe size to allow for better asynchrony.
+			 * TODO: strategic way to do this for multiple files? */
+			int ret = musl_ringleader_fcntl(fd, F_SETPIPE_SZ, 1024*512);
+			if(ret > 0)
+			{
+				file->pipe_size = ret;
+			}
+		}
 		struct ringleader_arena * arena = musl_ringleader_get_arena(
-				rl, NEXT_POW2(count) * 16);
+				rl, NEXT_POW2(file->block_size) * 16);
 
 		musl_rl_async_fds[fd].reader = ringleader_reader_factory(
 				rl,
 				arena,
 				fd,
 				0,
-				musl_rl_async_fds[fd].file_size);
+				musl_rl_async_fds[fd].file_size,
+				512*1024 /* max buffer size, magic for Pi4b's L2 */);
 	}
 
 	ringleader_promise_t p_read = ringleader_reader_read(
@@ -445,7 +459,20 @@ musl_rl_async_write(
 
 	if(!file->writer)
 	{
-		size_t max_write = (file->is_fifo) ? file->pipe_size : SIZE_MAX;
+		size_t max_write = SIZE_MAX;
+
+		if(file->is_fifo)
+		{
+			/* we want to grow the pipe size to allow for better asynchrony.
+			 * TODO: strategic way to do this for multiple files? */
+			int ret = musl_ringleader_fcntl(fd, F_SETPIPE_SZ, 1024*512);
+			if(ret > 0)
+			{
+				file->pipe_size = ret;
+			}
+
+			max_write = file->pipe_size;
+		}
 
 		file->writer = ringleader_writer_factory(
 				rl,
