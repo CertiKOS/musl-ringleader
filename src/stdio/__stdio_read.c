@@ -67,15 +67,21 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
 	if (f->buf_size) buf[len-1] = *f->rpos++;
 	return len;
 #else
-    struct ringleader *rl = get_ringleader();
+	struct ringleader *rl = get_ringleader();
+	ssize_t cnt;
 
-    if(musl_rl_async_fd_check(f->fd))
-    {
-        /* buffering is happening at lower level */
-        return __syscall_ret(musl_rl_async_fd_read(rl, f->fd, buf, len));
-    }
+	if(musl_rl_async_fd_check(f->fd))
+	{
+		/* buffering is happening at lower level */
+		cnt = musl_rl_async_fd_read(rl, f->fd, buf, len);
+		if (cnt <= 0) {
+			f->flags |= cnt ? F_ERR : F_EOF;
+			return 0;
+		}
+		return cnt;
+	}
 
-    ssize_t cnt = __syscall_ret(musl_ringleader_read(f->fd, buf, len));
+    cnt = __syscall_ret(musl_ringleader_read(f->fd, buf, len));
 
     if (cnt <= 0) {
         f->flags |= cnt ? F_ERR : F_EOF;
