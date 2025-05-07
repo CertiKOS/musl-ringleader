@@ -109,9 +109,15 @@ musl_rl_async_fd_init_prepare_io(
 		{
 			file->is_fifo = 1;
 		}
-		else
+		else if(offset >= 0)
 		{
 			file->offset = offset;
+		}
+		else
+		{
+			fprintf(stdenclave,
+					"musl_rl_async_fd_init_prepare_io: lseek failed: %d\n",
+					(int)offset);
 		}
 	}
 

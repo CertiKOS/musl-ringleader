@@ -115,12 +115,45 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 		iov[0].iov_len -= cnt;
 	}
 #else
-    if(f->wpos == f->wbase && (len == 0 || buf == NULL))
-    {
-        return 0;
-    }
 
-    struct ringleader *rl = get_ringleader();
+
+	if(f->wpos == f->wbase && (len == 0 || buf == NULL))
+	{
+		return 0;
+	}
+
+	struct ringleader *rl = get_ringleader();
+
+	if(musl_rl_async_fd_check(f->fd))
+	{
+		ssize_t cnt = 0;
+		if(f->wpos != f->wbase)
+		{
+			/* we have a buffer to flush */
+			cnt = musl_rl_async_write(rl, f->fd, f->wbase, f->wpos - f->wbase);
+			if(cnt < 0)
+			{
+				f->flags |= F_ERR;
+				return 0;
+			}
+		}
+
+		f->wpos = f->wbase = f->wend = 0;
+		if(cnt < 0)
+		{
+			f->flags |= F_ERR;
+			return 0;
+		}
+
+		cnt = musl_rl_async_write(rl, f->fd, buf, len);
+		if(cnt < 0)
+		{
+			f->flags |= F_ERR;
+			return 0;
+		}
+		return cnt;
+	}
+
 
     /* get buffer arena if not initialzied */
     if(!f->rl.buf_arena)
