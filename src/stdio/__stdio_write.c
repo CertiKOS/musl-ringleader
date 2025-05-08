@@ -119,6 +119,7 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 
 	if(f->wpos == f->wbase && (len == 0 || buf == NULL))
 	{
+		//TODO flush on len 0
 		return 0;
 	}
 

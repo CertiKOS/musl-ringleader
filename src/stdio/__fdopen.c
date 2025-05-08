@@ -25,7 +25,7 @@ FILE *__fdopen(int fd, const char *mode)
 	#ifndef _CERTIKOS_
 	if (!(f=malloc(sizeof *f + UNGET + BUFSIZ))) return 0;
 	#else
-	if (!(f=malloc(sizeof *f))) return 0;
+	if (!(f=malloc(sizeof *f + UNGET))) return 0;
 	#endif
 
 	/* Zero-fill only the struct, not the buffer */
@@ -49,19 +49,30 @@ FILE *__fdopen(int fd, const char *mode)
 
 	#ifndef _CERTIKOS_
 	f->buf = (unsigned char *)f + sizeof *f + UNGET;
-	#else
-    struct ringleader *rl = get_ringleader();
-    f->rl.buf_arena = musl_ringleader_get_arena(rl, BUFSIZ + UNGET);
-	unsigned char *buf = ringleader_arena_push(f->rl.buf_arena, BUFSIZ + UNGET);
-	if(buf == NULL){
-		free(f);
-		return 0;
-	}
-	f->buf = buf + UNGET;
-	f->rl.pending_buf_read = 0;
-	#endif
 
 	f->buf_size = BUFSIZ;
+	#else
+	struct ringleader *rl = get_ringleader();
+	if(musl_rl_async_fd_check(fd))
+	{
+		f->buf = (unsigned char *)f + sizeof *f + UNGET;
+		f->buf_size = 0;
+	}
+	else
+	{
+		/* old async interface */
+		f->rl.buf_arena = musl_ringleader_get_arena(rl, BUFSIZ + UNGET);
+		if(f->rl.buf_arena == NULL) {
+			free(f);
+			return 0;
+		}
+		unsigned char *buf = ringleader_arena_push(f->rl.buf_arena, BUFSIZ + UNGET);
+		f->buf = buf + UNGET;
+		f->rl.pending_buf_read = 0;
+		f->buf_size = BUFSIZ;
+	}
+	#endif
+
 
 	/* Activate line buffered mode for terminals */
 	f->lbf = EOF;

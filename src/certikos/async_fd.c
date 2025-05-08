@@ -20,7 +20,6 @@ struct musl_rl_async_fd
 		size_t block_size;
 		size_t n_blocks;
 		size_t file_size;
-		size_t offset;
 		size_t pipe_size;
 	}; /* file */
 
@@ -109,11 +108,7 @@ musl_rl_async_fd_init_prepare_io(
 		{
 			file->is_fifo = 1;
 		}
-		else if(offset >= 0)
-		{
-			file->offset = offset;
-		}
-		else
+		else if(offset < 0)
 		{
 			fprintf(stdenclave,
 					"musl_rl_async_fd_init_prepare_io: lseek failed: %d\n",
@@ -206,14 +201,12 @@ musl_rl_async_fd_finish_all(struct ringleader *rl)
 
 
 static void
-musl_rl_async_fd_do_seek_set(
+musl_rl_async_fd_flush(
 		struct ringleader *rl,
-		int fd,
-		off_t offset)
+		int fd)
 {
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
 
-	file->offset = offset;
 
 	if(file->writer)
 	{
@@ -242,43 +235,8 @@ musl_rl_async_fd_lseek(
 {
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
 
-	if(file->offset < 0)
-	{
-		return -ESPIPE;
-	}
-
-	switch(whence)
-	{
-		case SEEK_SET:
-			if(offset != file->offset)
-			{
-				musl_rl_async_fd_do_seek_set(rl, fd, offset);
-			}
-			break;
-		case SEEK_CUR:
-			if(offset != 0)
-			{
-				musl_rl_async_fd_do_seek_set(rl, fd, file->offset + offset);
-			}
-			break;
-		case SEEK_END:
-			musl_rl_async_fd_do_seek_set(rl, fd, file->file_size + offset);
-			break;
-#ifdef SEEK_DATA
-		case SEEK_DATA:
-		case SEEK_HOLE:
-			fprintf(stdenclave, "musl_rl_async_fd_lseek: SEEK_DATA/SEEK_HOLE not implemented\n");
-			exit(1);
-			break;
-#endif /* SEEK_DATA */
-		default:
-			return -1;
-	}
-
-
-
-	//TODO do we need to sync the OS?
-	return file->offset;
+	musl_rl_async_fd_flush(rl, fd);
+	return musl_ringleader_do_lseek(rl, fd, offset, whence);
 }
 
 
@@ -442,11 +400,6 @@ musl_rl_async_fd_read(
 			count);
 
 	ssize_t ret = (uintptr_t)ringleader_promise_await(rl, p_read, NULL);
-
-	if(file->offset >= 0)
-	{
-		file->offset += ret;
-	}
 
 	return ret;
 }

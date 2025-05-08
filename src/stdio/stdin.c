@@ -2,7 +2,11 @@
 
 #undef stdin
 
+#ifdef _CERTIKOS_
+static unsigned char buf[UNGET];
+#else
 static unsigned char buf[BUFSIZ+UNGET];
+#endif
 
 hidden FILE __stdin_FILE = {
 	.buf = buf+UNGET,
