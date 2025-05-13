@@ -150,6 +150,11 @@ musl_rl_async_fd_try_ensure(
 	}
 
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
+	if(file->is_async)
+	{
+		return file;
+	}
+
 	if(!file->file_open)
 	{
 		musl_rl_async_fd_init(rl, fd);
@@ -446,6 +451,11 @@ musl_rl_async_write(
 			file->writer,
 			buf,
 			count);
+
+	if(p_write == RINGLEADER_PROMISE_INVALID)
+	{
+		return count;
+	}
 
 	return (ssize_t)ringleader_promise_await(rl, p_write, NULL);
 }
