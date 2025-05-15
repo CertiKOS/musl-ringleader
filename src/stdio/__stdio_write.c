@@ -163,6 +163,7 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
     }
 
     /* migrate to arena buffer, if not in shmem */
+    /* e.g. this function can be called with a temp buffer, if buf_size is 0 */
     if(!ringleader_arena_contains(f->rl.buf_arena, f->buf))
     {
         /* first stdout, and handling for all stderr prints */
@@ -249,14 +250,10 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
             musl_ringleader_get_arena(rl, BUFSIZ + UNGET);
         ringleader_arena_push(f->rl.buf_arena, UNGET);
 
-        /* for stdout, we need to push the buffer */
-        if(f->buf_size == BUFSIZ)
-        {
-            f->buf = ringleader_arena_push(f->rl.buf_arena, BUFSIZ);
-            f->wend = f->buf + f->buf_size;
-            f->wpos = f->wbase = f->buf;
-        }
-        /* for stderr, the caller overwrites f->buf, f->w... etc */
+        f->buf = ringleader_arena_push(f->rl.buf_arena, BUFSIZ);
+        f->buf_size =  BUFSIZ;
+        f->wend = f->buf + f->buf_size;
+        f->wpos = f->wbase = f->buf;
     }
 
 

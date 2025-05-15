@@ -692,6 +692,14 @@ int vfprintf(FILE *restrict f, const char *restrict fmt, va_list ap)
 
 	olderr = f->flags & F_ERR;
 	f->flags &= ~F_ERR;
+#ifdef _CERTIKOS_
+	if (!f->buf_size && f->rl.buf_arena) {
+		saved_buf = f->buf;
+		f->buf = (unsigned char *)f->rl.buf_arena->raw_shmem + UNGET;
+		f->buf_size = f->rl.buf_arena->size - UNGET;
+		f->wpos = f->wbase = f->wend = 0;
+	}
+#endif
 	if (!f->buf_size) {
 		saved_buf = f->buf;
 		f->buf = internal_buf;
@@ -700,6 +708,13 @@ int vfprintf(FILE *restrict f, const char *restrict fmt, va_list ap)
 	}
 	if (!f->wend && __towrite(f)) ret = -1;
 	else ret = printf_core(f, fmt, &ap2, nl_arg, nl_type);
+#ifdef _CERTIKOS_
+	if (saved_buf && f->rl.buf_arena) {
+		f->buf_size = 0;
+		f->wpos = f->wbase = f->wend = 0;
+		saved_buf = 0;
+	}
+#endif
 	if (saved_buf) {
 		f->write(f, 0, 0);
 		if (!f->wpos) ret = -1;
