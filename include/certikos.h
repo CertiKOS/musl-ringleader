@@ -25,8 +25,12 @@ int musl_ringleader_fdatasync(int fd);
 int musl_ringleader_mkdirat(int fd, const char *filename, mode_t mode);
 int musl_ringleader_pipe2(int fd[2], int flags);
 int musl_ringleader_shutdown(int fd, int how);
-pid_t musl_ringleader_getpid(); // use certikos pid
+pid_t musl_ringleader_getpid();
 pid_t musl_ringleader_getppid();
+int musl_ringleader_getuid();
+int musl_ringleader_geteuid();
+int musl_ringleader_getgid();
+int musl_ringleader_getegid();
 int musl_ringleader_unlinkat(int fd, const char *path, int flag);
 void musl_ringleader_sync();
 ssize_t musl_ringleader_read(int fd, void *buf, size_t count);

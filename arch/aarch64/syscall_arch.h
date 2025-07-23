@@ -93,6 +93,10 @@ static inline long __syscall0(long n)
         //use certikos pid
 		//case SYS_getpid: return musl_ringleader_getpid();
 		case SYS_getppid: return musl_ringleader_getppid();
+		case SYS_getuid: return musl_ringleader_getuid();
+		case SYS_geteuid: return musl_ringleader_geteuid();
+		case SYS_getgid: return musl_ringleader_getgid();
+		case SYS_getegid: return musl_ringleader_getegid();
 		case SYS_sync: musl_ringleader_sync(); return 0;
 		default: break;
 	}
