@@ -8,7 +8,7 @@
 pid_t musl_ringleader_getppid()
 {
 	struct ringleader *rl = get_ringleader();
-	int32_t id = ringleader_prep_getppid(rl);
+	int32_t id = ringleader_sqe_getppid_await(rl);
 	void * cookie = musl_ringleader_set_cookie(rl, id);
 
 #ifdef MUSL_RINGLEADER_PROFILE

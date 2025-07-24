@@ -31,6 +31,7 @@ int musl_ringleader_getuid();
 int musl_ringleader_geteuid();
 int musl_ringleader_getgid();
 int musl_ringleader_getegid();
+int musl_ringleader_getpgid(pid_t pid);
 int musl_ringleader_unlinkat(int fd, const char *path, int flag);
 void musl_ringleader_sync();
 ssize_t musl_ringleader_read(int fd, void *buf, size_t count);
