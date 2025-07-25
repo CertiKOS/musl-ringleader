@@ -69,7 +69,10 @@ musl_rl_async_fd_try_ensure(
 		struct ringleader *rl,
 		int fd);
 
-
+void
+musl_rl_async_fd_deasync(
+		struct ringleader *rl,
+		int fd);
 
 static inline struct ringleader*
 get_ringleader(void)

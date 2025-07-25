@@ -132,6 +132,9 @@ static inline long __syscall2(long n, long a, long b)
 	switch(n)
 	{
 		case SYS_pipe2: return musl_ringleader_pipe2((void*)a, b);
+#ifdef SYS_dup2
+		case SYS_dup2: return musl_ringleader_dup3(a, b, 0);
+#endif
 		default: break;
 	}
 #endif
@@ -157,6 +160,7 @@ static inline long __syscall3(long n, long a, long b, long c)
 		case SYS_unlinkat: return musl_ringleader_unlinkat(a, (void*)b, c);
 		case SYS_read: return musl_ringleader_read(a, (void*)b, c);
 		case SYS_write: return musl_ringleader_write(a, (void*)b, c);
+		case SYS_dup3: return musl_ringleader_dup3(a, b, c);
 		default: break;
 	}
 #endif

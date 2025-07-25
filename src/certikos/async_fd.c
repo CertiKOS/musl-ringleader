@@ -171,11 +171,6 @@ musl_rl_async_fd_try_ensure(
 
 
 
-
-
-
-
-
 void
 musl_rl_async_fd_finish_all(struct ringleader *rl)
 {
@@ -242,6 +237,42 @@ musl_rl_async_fd_lseek(
 
 	musl_rl_async_fd_flush(rl, fd);
 	return musl_ringleader_do_lseek(rl, fd, offset, whence);
+}
+
+void
+musl_rl_async_fd_deasync(
+		struct ringleader *rl,
+		int fd)
+{
+	if(fd >= SIZEOF_ARRAY(musl_rl_async_fds) || fd < 0)
+	{
+		return;
+	}
+
+	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
+	if(!file->file_open || !file->is_async)
+	{
+		return;
+	}
+
+	musl_rl_async_fd_flush(rl, fd);
+
+	//TODO potential race conditions here (use after flush)
+	if(file->writer)
+	{
+		ringleader_writer_destroy(rl, &file->writer);
+	}
+
+	if(file->reader)
+	{
+		ringleader_reader_destroy(rl, &file->reader);
+	}
+
+	file->file_open = 0;
+	file->is_async = 0;
+	file->is_fifo = 0;
+	file->is_socket = 0;
+	file->prepared = 0;
 }
 
 

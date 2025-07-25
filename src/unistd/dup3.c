@@ -4,6 +4,28 @@
 #include <fcntl.h>
 #include "syscall.h"
 
+#ifdef _CERTIKOS_
+#include "certikos_impl.h"
+#include "ringleader.h"
+
+int musl_ringleader_dup3(int old, int new, int flags)
+{
+	struct ringleader *rl = get_ringleader();
+
+	musl_rl_async_fd_deasync(rl, new);
+
+	int32_t id = ringleader_sqe_dup3_await(rl, old, new, flags);
+	void * cookie = musl_ringleader_set_cookie(rl, id);
+
+	ringleader_submit(rl);
+	pid_t ret = musl_ringleader_wait_result(rl, cookie);
+
+	return ret;
+}
+
+#endif
+
+
 int __dup3(int old, int new, int flags)
 {
 	int r;
