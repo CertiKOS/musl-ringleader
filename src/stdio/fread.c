@@ -13,6 +13,18 @@ size_t fread(void *restrict destv, size_t size, size_t nmemb, FILE *restrict f)
 	if (!size) nmemb = 0;
 
 #ifdef _CERTIKOS_
+	if(musl_rl_async_fd_check(f->fd))
+	{
+		ssize_t cnt;
+		struct ringleader *rl = get_ringleader();
+		/* buffering is happening at lower level */
+		cnt = musl_rl_async_fd_read(rl, f->fd, dest, len);
+		if (cnt <= 0) {
+			f->flags |= cnt ? F_ERR : F_EOF;
+			return 0;
+		}
+		return cnt;
+	}
     rl_stdio_wait_pending_read(f);
 #endif
 

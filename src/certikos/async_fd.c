@@ -435,6 +435,8 @@ musl_rl_async_fd_read(
 			buf,
 			count);
 
+	musl_ringleader_flush_cqes(rl);
+
 	ssize_t ret = (uintptr_t)ringleader_promise_await(rl, p_read, NULL);
 
 	return ret;
