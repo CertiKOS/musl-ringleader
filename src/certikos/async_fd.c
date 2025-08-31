@@ -6,6 +6,7 @@
 #include <ringleader/writer.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <time.h>
 #include "certikos_impl.h"
 #include "statx.h"
 
@@ -14,6 +15,8 @@ struct musl_rl_async_fd
 {
 	struct ringleader_reader *reader;
 	struct ringleader_writer *writer;
+
+	ringleader_promise_t p_close;
 
 	struct
 	{
@@ -133,9 +136,19 @@ musl_rl_async_fd_init(
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
 	DEBUG_ASSERT(file->file_open == 0);
 
+	if(file->do_close && file->p_close != RINGLEADER_PROMISE_INVALID)
+	{
+		/* still closing from a previous close */
+		fprintf(stdenclave,
+				"musl_rl_async_fd_init: waiting for previous close to finish\n");
+
+		ringleader_promise_await(rl, file->p_close, NULL);
+	}
+
 	memset(file, 0, sizeof(*file));
 
 	file->file_open = 1;
+	file->p_close = RINGLEADER_PROMISE_INVALID;
 }
 
 
@@ -170,7 +183,6 @@ musl_rl_async_fd_try_ensure(
 
 
 
-
 void
 musl_rl_async_fd_finish_all(struct ringleader *rl)
 {
@@ -185,13 +197,35 @@ musl_rl_async_fd_finish_all(struct ringleader *rl)
 		}
 	}
 
+
+	///* flush all pending IO */
+	//uint32_t nop_sqe = ringleader_sqe_nop_await(rl);
+	//ringleader_sqe_set_flags(rl, nop_sqe, IOSQE_IO_DRAIN);
+	//void *cookie = musl_ringleader_set_cookie(rl, nop_sqe);
+	//ringleader_submit(rl);
+
+	////TODO timeout
+	//musl_ringleader_wait_result(rl, cookie);
+
+	// If exit was called from a signal handler, this loop can spin forever.
 	for(int i = 0; i < SIZEOF_ARRAY(musl_rl_async_fds); i++)
 	{
+		struct timespec ts_start, ts_now;
+		clock_gettime(CLOCK_MONOTONIC, &ts_start);
+
 		while(musl_rl_async_fds[i].file_open && musl_rl_async_fds[i].is_async)
 		{
-			/* Ignore any cookies since this should be called at exit time */
-			struct io_uring_cqe cqe;
-			(void) ringleader_peek_cqe(rl, &cqe);
+			musl_ringleader_flush_cqes(rl);
+
+			clock_gettime(CLOCK_MONOTONIC, &ts_now);
+			if(ts_now.tv_sec - ts_start.tv_sec > 5)
+			{
+				fprintf(stdenclave,
+						"musl_rl_async_fd_finish_all: "
+						"timeout waiting for fd %d to close\n",
+						i);
+				break;
+			}
 		}
 	}
 }
@@ -218,11 +252,15 @@ musl_rl_async_fd_flush(
 
 	if(file->reader)
 	{
-		ringleader_reader_reset(rl, &file->reader);
+		//TODO, if we destroy the reader while it's prefetching new shared
+		//memory, and we are able to close and open the file again, the
+		//dangling prefetch might read from the wrong file descriptor.
+		//I think we need to somehow cancel the prefetch first, and wait.
+		ringleader_promise_t p_drain = ringleader_reader_destroy(
+			rl, &file->reader);
+		ringleader_promise_free_on_fulfill(rl, p_drain);
 	}
 
-
-	//TODO do lseek
 }
 
 
@@ -233,8 +271,6 @@ musl_rl_async_fd_lseek(
 		off_t offset,
 		int whence)
 {
-	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
-
 	musl_rl_async_fd_flush(rl, fd);
 	return musl_ringleader_do_lseek(rl, fd, offset, whence);
 }
@@ -263,16 +299,45 @@ musl_rl_async_fd_deasync(
 		ringleader_writer_destroy(rl, &file->writer);
 	}
 
-	if(file->reader)
-	{
-		ringleader_reader_destroy(rl, &file->reader);
-	}
-
 	file->file_open = 0;
 	file->is_async = 0;
 	file->is_fifo = 0;
 	file->is_socket = 0;
 	file->prepared = 0;
+}
+
+struct close_read_ctx
+{
+	struct musl_rl_async_fd *file;
+	int res;
+};
+
+static void
+musl_rl_async_fd_close_destroy(
+		struct ringleader *rl,
+		struct musl_rl_async_fd *file)
+{
+	file->file_open = 0;
+	file->is_async = 0;
+	file->is_fifo = 0;
+	file->is_socket = 0;
+	file->prepared = 0;
+	file->do_close = 0;
+	file->p_close = RINGLEADER_PROMISE_INVALID;
+}
+
+
+static void
+musl_rl_async_fd_close_reader_drained(
+		struct ringleader *rl,
+		ringleader_promise_t promise,
+		void *dontcare)
+{
+	struct close_read_ctx *ctx = ringleader_promise_get_ctx_fast(
+			rl, promise, struct close_read_ctx);
+
+	musl_rl_async_fd_close_destroy(rl, ctx->file);
+	ringleader_promise_set_result_int(rl, promise, ctx->res);
 }
 
 
@@ -284,24 +349,37 @@ musl_rl_async_fd_close_done(
 {
 	struct io_uring_cqe *cqe = data;
 	struct musl_rl_async_fd *file = (void*)cqe->user_data;
-
-	file->file_open = 0;
-	file->is_async = 0;
-	file->is_fifo = 0;
-	file->is_socket = 0;
-	file->prepared = 0;
+	int res = cqe->res;
 
 	if(file->reader)
 	{
-		ringleader_reader_destroy(rl, &file->reader);
-	}
+		ringleader_promise_t p_drain = ringleader_reader_destroy(
+			rl, &file->reader);
+		/* since we closed the file, this read should end */
+		//ringleader_promise_await(rl, p_drain, NULL);
 
-	ringleader_promise_set_result(rl, promise, (void*)(uintptr_t)cqe->res);
+		ringleader_promise_t p_done = ringleader_promise_chain(rl, p_drain);
+		ringleader_promise_free_on_fulfill(rl, p_drain);
+
+		struct close_read_ctx *ctx = ringleader_promise_get_ctx_fast(
+				rl, p_done, struct close_read_ctx);
+		ctx->file = file;
+		ctx->res = res;
+
+		ringleader_promise_then(rl, p_done,
+				musl_rl_async_fd_close_reader_drained);
+		ringleader_promise_set_result_promise(rl, promise, p_done);
+	}
+	else
+	{
+		musl_rl_async_fd_close_destroy(rl, file);
+		ringleader_promise_set_result_int(rl, promise, res);
+	}
 }
 
 
-static void
-musl_rl_async_fd_do_close(
+static ringleader_promise_t
+musl_rl_async_fd_start_close(
 		struct ringleader *rl,
 		int fd)
 {
@@ -315,12 +393,12 @@ musl_rl_async_fd_do_close(
 					rl, close_sqe, musl_rl_async_fd_close_done);
 
 	ringleader_submit(rl);
-	ringleader_promise_free_on_fulfill(rl, p_close);
+	return p_close;
 }
 
 
 static void
-musl_rl_async_fd_writer_drained(
+musl_rl_async_fd_close_writer_drained(
 		struct ringleader *rl,
 		ringleader_promise_t p_drain,
 		void *dontcare)
@@ -332,9 +410,8 @@ musl_rl_async_fd_writer_drained(
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
 	ringleader_writer_destroy(rl, &file->writer);
 
-	musl_rl_async_fd_do_close(rl, fd);
-
-	ringleader_promise_set_result_dontcare(rl, p_drain);
+	ringleader_promise_set_result_promise(rl, p_drain,
+		musl_rl_async_fd_start_close(rl, fd));
 }
 
 
@@ -363,6 +440,8 @@ musl_rl_async_fd_close(
 
 	file->do_close = 1;
 
+
+	// TODO I'm not sure if it's safe to close asynchronously, what about re-opens?
 	if(file->writer)
 	{
 		ringleader_promise_t p_drain = ringleader_writer_drain(
@@ -372,12 +451,16 @@ musl_rl_async_fd_close(
 				rl, p_drain, int);
 		*ctx = fd;
 
-		ringleader_promise_then(rl, p_drain, musl_rl_async_fd_writer_drained);
+		ringleader_promise_then(rl, p_drain,
+				musl_rl_async_fd_close_writer_drained);
+
+		file->p_close = p_drain;
 		ringleader_promise_free_on_fulfill(rl, p_drain);
 	}
 	else
 	{
-		musl_rl_async_fd_do_close(rl, fd);
+		file->p_close = musl_rl_async_fd_start_close(rl, fd);
+		ringleader_promise_free_on_fulfill(rl, file->p_close);
 	}
 
 	return 0;
@@ -400,13 +483,14 @@ musl_rl_async_fd_read(
 	DEBUG_ASSERT(file->file_open);
 	DEBUG_ASSERT(file->is_async);
 
-	/* we don't support READ/WRITE files */
-	ASSERT(!file->writer);
+	if(file->writer)
+	{
+		musl_rl_async_fd_flush(rl, fd);
+		ringleader_writer_destroy(rl, &file->writer);
+	}
 
 	if(file->reader == NULL)
 	{
-		size_t max_write = SIZE_MAX;
-
 		if(file->is_fifo)
 		{
 			/* we want to grow the pipe size to allow for better asynchrony.
@@ -451,8 +535,10 @@ musl_rl_async_write(
 {
 	struct musl_rl_async_fd *file = &musl_rl_async_fds[fd];
 
-	/* we don't support READ/WRITE files */
-	ASSERT(!file->reader);
+	if(file->reader)
+	{
+		musl_rl_async_fd_flush(rl, fd);
+	}
 
 	if(!file->writer)
 	{
