@@ -24,7 +24,7 @@ pid_t getpid(void)
 #ifdef _CERTIKOS_
 	/* optimization: avoid syscall on every getpid() call */
 	static pid_t pid;
-	int do_once = 0;
+	static int do_once = 0;
 	if (do_once == 0) {
 		pid = __syscall(SYS_getpid);
 		do_once = 1;
