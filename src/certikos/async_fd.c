@@ -573,6 +573,7 @@ musl_rl_async_write(
 
 	if(p_write == RINGLEADER_PROMISE_INVALID)
 	{
+		musl_ringleader_flush_cqes(rl);
 		return count;
 	}
 
